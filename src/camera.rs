@@ -1,0 +1,67 @@
+use winit::{
+    event::*,
+};
+use cgmath::prelude::*;
+use cgmath::{Rad, Point3, Matrix4, Vector3};
+use crate::inputs::*;
+use cgmath::num_traits::clamp;
+
+pub struct Camera {
+    pub pos: Point3<f32>,
+    pub velocity: Vector3<f32>,
+    yaw: Rad<f32>,
+    pitch: Rad<f32>,
+    speed: f32,
+}
+
+impl Camera {
+
+    pub fn new(speed: f32) -> Self {
+        Self {
+            pos: (0.0, 0.0, 0.0).into(),
+            velocity: (0.0, 0.0, 0.0).into(),
+            yaw: Rad(0.0),
+            pitch: Rad(0.0),
+            speed,
+        }
+    }
+
+    pub fn build_view_matrix(&self) -> cgmath::Matrix4<f32> {
+        Matrix4::look_to_rh(
+            self.pos,
+            Vector3::new(
+                self.yaw.0.cos()*self.pitch.0.cos(),
+                self.pitch.0.sin(),
+                self.yaw.0.sin()*self.pitch.0.cos(),
+            ),
+            Vector3::unit_y(),
+        )
+    }
+
+    pub fn update(&mut self,inputs:&Inputs) {
+
+        if inputs.keyboard[VirtualKeyCode::Z as usize] {
+            self.velocity += Vector3::new(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
+        }
+        if inputs.keyboard[VirtualKeyCode::S as usize] {
+            self.velocity += -Vector3::new(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
+        }
+
+        if inputs.keyboard[VirtualKeyCode::D as usize] {
+            self.velocity += Vector3::new(-self.yaw.0.sin(),0.0,self.yaw.0.cos())*self.speed;
+        }
+        if inputs.keyboard[VirtualKeyCode::Q as usize] {
+            self.velocity += Vector3::new(self.yaw.0.sin(),0.0,-self.yaw.0.cos())*self.speed;
+        }
+        if inputs.keyboard[VirtualKeyCode::R as usize] {
+            self.velocity.y -= self.speed;
+        }
+        if inputs.keyboard[VirtualKeyCode::Space as usize] {
+            self.velocity.y += self.speed;
+        }
+        self.pos+=self.velocity;
+        self.velocity*=0.8;
+        self.pitch = clamp(self.pitch+Rad((-inputs.mouse_motion_y / 200.0) as f32),Rad(-1.5),Rad(1.5));
+        self.yaw += Rad((inputs.mouse_motion_x / 200.0) as f32);
+    }
+}

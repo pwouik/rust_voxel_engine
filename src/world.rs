@@ -7,17 +7,17 @@ use crate::chunk_loader::ChunkLoader;
 
 pub struct World{
     pub mesh_map:HashMap<Vector3<i32>,Mesh>,
-    pub chunk_map:HashMap<Vector3<i32>,Chunk>,
+    pub chunk_map:HashMap<Vector3<i32>,Box<Chunk>>,
     chunk_loader:ChunkLoader
 }
 impl World{
     pub fn new(renderer:&Renderer)->World{
         let mesh_map:HashMap<Vector3<i32>,Mesh>=HashMap::new();
-        let chunk_map:HashMap<Vector3<i32>,Chunk>=HashMap::new();
+        let chunk_map:HashMap<Vector3<i32>,Box<Chunk>>=HashMap::new();
         let chunk_loader=ChunkLoader::new();
-        for x in 0..0 {
-            for z in 0..1{
-                for y in 0..1{
+        for x in 0..2 {
+            for z in 0..2{
+                for y in 0..2{
                     chunk_loader.load(Vector3{x,y,z});
                 }
             }
@@ -30,11 +30,8 @@ impl World{
         }
     }
     fn add_chunks(&mut self,renderer:&Renderer){
-        println!("d");
         loop{
-            println!("x");
             let chunk_result=self.chunk_loader.try_get_chunk();
-            println!("z");
             match chunk_result{
                 Ok(chunk) => {
                     self.mesh_map.insert(chunk.0,chunk.1.create_mesh(renderer));
@@ -43,10 +40,8 @@ impl World{
                 Err(_) => {break}
             }
         }
-        println!("e");
     }
     pub fn tick(&mut self,renderer:&Renderer){
-        println!("c");
         self.add_chunks(renderer);
     }
 }

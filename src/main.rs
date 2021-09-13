@@ -35,7 +35,6 @@ fn main() {
     camera.update(&inputs);
     renderer.update(&camera);
     let mut counter:i32=0;
-    println!("a");
     event_loop.run(move |event, _, control_flow| {
         if !inputs.update(&event,&window) {
             match event {
@@ -78,7 +77,6 @@ fn main() {
         camera.update(&inputs);
         counter+=1;
         if counter%3==0{
-            println!("b");
             world.tick(&renderer);
         }
     });

@@ -11,8 +11,7 @@ use std::time::Duration;
 
 pub struct ChunkLoader{
     sender_pos:crossbeam::channel::Sender<Vector3<i32>>,
-    receiver_chunk:Receiver<(Vector3<i32>,Chunk)>,
-    receiver_dummy:Receiver<Chunk>,
+    receiver_chunk:Receiver<(Vector3<i32>,Box<Chunk>)>,
     thread_handles:Vec<JoinHandle<()>>,
     running:Arc<AtomicBool>
 }
@@ -20,13 +19,11 @@ impl ChunkLoader{
     pub fn new()->Self{
         let (sender_pos,receiver_pos) = bounded(10);
         let (sender_chunk,receiver_chunk)=channel();
-        let (sender_dummy,receiver_dummy)=channel();
         let mut thread_handles=Vec::new();
         let running = Arc::new(AtomicBool::new(true));
         for i in 0..4{
             let loc_receiver_pos = receiver_pos.clone();
             let loc_sender_chunk= sender_chunk.clone();
-            let loc_sender_dummy= sender_dummy.clone();
             let loc_running= running.clone();
             thread_handles.push(thread::spawn(move || {
                 while loc_running.load(Ordering::Relaxed) {
@@ -34,10 +31,7 @@ impl ChunkLoader{
                     let pos = loc_receiver_pos.try_recv();
                     match pos{
                         Ok(chunk_pos)=>{
-                            let chunk=Chunk::new(chunk_pos);
-                            loc_sender_dummy.send(chunk).unwrap();
-                            let chunk=Chunk::new(chunk_pos);
-                            loc_sender_chunk.send((chunk_pos,chunk)).unwrap();
+                            loc_sender_chunk.send((chunk_pos,Box::new(Chunk::new(chunk_pos)))).unwrap();
                         }
                         Err(_)=>{}
                     }
@@ -48,7 +42,6 @@ impl ChunkLoader{
         ChunkLoader{
             sender_pos,
             receiver_chunk,
-            receiver_dummy,
             thread_handles,
             running
         }
@@ -56,18 +49,8 @@ impl ChunkLoader{
     pub fn load(&self,pos:Vector3<i32>){
         self.sender_pos.send(pos).unwrap();
     }
-    pub fn try_get_chunk(&self) -> Result<(Vector3<i32>, Chunk), TryRecvError> {
-        println!("stack overflow here");
-        let res=self.receiver_dummy.try_recv();
-        match res{
-            Ok(res)=>{
-                println!("got it");
-            }
-            Err(_)=>{println!("gotn't it");}
-        }
-        let result=self.receiver_chunk.try_recv();
-        println!("not reached2");
-        result
+    pub fn try_get_chunk(&self) -> Result<(Vector3<i32>, Box<Chunk>), TryRecvError> {
+        self.receiver_chunk.try_recv()
     }
 }
 impl Drop for ChunkLoader {

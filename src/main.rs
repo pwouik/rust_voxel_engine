@@ -77,7 +77,7 @@ fn main() {
         camera.update(&inputs);
         counter+=1;
         if counter%3==0{
-            world.tick(&renderer);
+            world.tick(&renderer,&camera);
         }
     });
 }

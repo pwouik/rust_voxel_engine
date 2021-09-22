@@ -1,7 +1,7 @@
 use crate::mesh::*;
 use crate::block::*;
 use crate::renderer::*;
-use cgmath::Vector3;
+use cgmath::{Vector3, Point3};
 
 const TEXTURE_INDEX:[[u32;6];1]=[[0,0,2,1,0,0]];
 const FACES:[[f32;12];6]= [
@@ -59,7 +59,7 @@ pub struct Chunk{
     pub data:[Block;32*32*32],
 }
 impl Chunk{
-    pub fn new(pos:Vector3<i32>)->Chunk{
+    pub fn new(pos:Point3<i32>)->Chunk{
         let mut data:[Block;32*32*32]=unsafe {
             std::mem::MaybeUninit::uninit().assume_init()
         };

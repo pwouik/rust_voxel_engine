@@ -18,6 +18,7 @@ mod mesh;
 mod block;
 mod world;
 mod chunk_loader;
+mod util;
 
 
 fn main() {

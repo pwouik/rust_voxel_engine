@@ -1,7 +1,6 @@
 use winit::{
     event::*,
 };
-use cgmath::prelude::*;
 use cgmath::{Rad, Point3, Matrix4, Vector3};
 use crate::inputs::*;
 use cgmath::num_traits::clamp;
@@ -54,10 +53,16 @@ impl Camera {
             self.velocity += Vector3::new(self.yaw.0.sin(),0.0,-self.yaw.0.cos())*self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::R as usize] {
-            self.velocity.y -= self.speed;
+            self.velocity.y -= 0.1;
         }
         if inputs.keyboard[VirtualKeyCode::Space as usize] {
-            self.velocity.y += self.speed;
+            self.velocity.y += 0.1;
+        }
+        if inputs.keyboard[VirtualKeyCode::W as usize] {
+            self.speed/=1.01;
+        }
+        if inputs.keyboard[VirtualKeyCode::X as usize] {
+            self.speed*=1.01;
         }
         self.pos+=self.velocity;
         self.velocity*=0.8;

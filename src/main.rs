@@ -32,7 +32,7 @@ fn main() {
     let mut renderer = block_on(Renderer::new(&window));
     let mut camera = Camera::new(0.1);
     let mut inputs = Inputs::new();
-    let mut world= World::new(&renderer);
+    let mut world= World::new();
     camera.update(&inputs);
     renderer.update(&camera);
     let mut counter:i32=0;
@@ -77,6 +77,7 @@ fn main() {
         }
         camera.update(&inputs);
         counter+=1;
+        world.update_display(&renderer);
         if counter%3==0{
             world.tick(&renderer,&camera);
         }

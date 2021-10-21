@@ -3,7 +3,7 @@ use std::collections::{HashSet, HashMap};
 use crate::chunk::Chunk;
 use crate::util::threadpool::ThreadPool;
 
-pub const RENDER_DIST:i32=4;
+pub const RENDER_DIST:i32=6;
 pub const RENDER_DIST_HEIGHT:i32=3;
 
 pub struct ChunkLoader{

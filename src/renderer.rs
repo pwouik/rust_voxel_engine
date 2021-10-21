@@ -11,6 +11,9 @@ use winit::{
 };
 use cgmath::*;
 use std::num::NonZeroU32;
+use std::time::Instant;
+use egui_wgpu_backend::*;
+use egui_winit_platform::Platform;
 use crate::texture::Texture;
 
 #[rustfmt::skip]
@@ -27,6 +30,7 @@ pub struct Renderer {
     config:wgpu::SurfaceConfiguration,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    egui_rpass:RenderPass,
     fovy: Deg<f32>,
     znear: f32,
     zfar: f32,
@@ -53,6 +57,7 @@ impl Renderer {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
+                force_fallback_adapter: false,
                 compatible_surface: Some(&surface),
             })
             .await
@@ -82,6 +87,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::Mailbox,
         };
         surface.configure(&device, &config);
+        let mut egui_rpass = RenderPass::new(&device, config.format, 1);
 
         let fovy= Deg(45.0);
         let znear= 0.01;
@@ -248,6 +254,7 @@ impl Renderer {
             config,
             device,
             queue,
+            egui_rpass,
             fovy,
             znear,
             zfar,
@@ -298,19 +305,20 @@ impl Renderer {
         );
     }
 
-    pub fn render(&mut self,world:&World){
-        let frame = match self.surface.get_current_frame() {
+    pub fn render(&mut self, world:&World, platform: &mut Platform){
+        let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
-            Err(_) => {
-                println!("fail");
+            Err(e) => {
+                println!("fail {}",e);
                 self.surface.configure(&self.device, &self.config);
-                self.surface.get_current_frame().expect("Failed to acquire next surface texture!")
+                self.surface.get_current_texture().expect("Failed to acquire next surface texture!")
             }
         };
         let view = frame
-            .output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let render_time=Instant::now();
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
@@ -352,6 +360,42 @@ impl Renderer {
             }
         }
         self.queue.submit(iter::once(encoder.finish()));
+
+
+        platform.begin_frame();
+        egui::Window::new("Info").show(&platform.context(), |ui| {
+            ui.label(format!("render time:{}",render_time.elapsed().as_millis()));
+        });
+        let (_output, paint_commands) = platform.end_frame(None);
+        let paint_jobs = platform.context().tessellate(paint_commands);
+
+        let mut encoder_gui = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Egui encoder"),
+        });
+        // Upload all resources for the GPU.
+        let screen_descriptor = ScreenDescriptor {
+            physical_width: self.config.width,
+            physical_height: self.config.height,
+            scale_factor: 1.0,
+        };
+        self.egui_rpass.update_texture(&self.device, &self.queue, &platform.context().texture());
+        self.egui_rpass.update_user_textures(&self.device, &self.queue);
+        self.egui_rpass.update_buffers(&self.device, &self.queue, &paint_jobs, &screen_descriptor);
+
+        // Record all render passes.
+        self.egui_rpass
+            .execute(
+                &mut encoder_gui,
+                &view,
+                &paint_jobs,
+                &screen_descriptor,
+                None,
+            )
+            .unwrap();
+        // Submit the commands.
+        self.queue.submit(iter::once(encoder_gui.finish()));
+
+        frame.present();
 
     }
 }

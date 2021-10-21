@@ -1,8 +1,13 @@
+use std::time::Instant;
+use egui::FontDefinitions;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{WindowBuilder},
 };
+use egui_wgpu_backend::*;
+use egui_winit_platform;
+use egui_winit_platform::{Platform, PlatformDescriptor};
 use crate::camera::Camera;
 use crate::renderer::Renderer;
 use crate::inputs::Inputs;
@@ -25,7 +30,13 @@ fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-
+    let mut platform = Platform::new(PlatformDescriptor {
+        physical_width: window.inner_size().width as u32,
+        physical_height: window.inner_size().height as u32,
+        scale_factor: window.scale_factor(),
+        font_definitions: FontDefinitions::default(),
+        style: Default::default(),
+    });
     use futures::executor::block_on;
 
     // Since main can't be async, we're going to need to block
@@ -36,7 +47,9 @@ fn main() {
     camera.update(&inputs);
     renderer.update(&camera);
     let mut counter:i32=0;
+    let start_time=Instant::now();
     event_loop.run(move |event, _, control_flow| {
+        platform.handle_event(&event);
         if !inputs.update(&event,&window) {
             match event {
                 Event::WindowEvent {
@@ -64,8 +77,9 @@ fn main() {
                     }
                 }
                 Event::RedrawRequested(_) => {
+                    platform.update_time(start_time.elapsed().as_secs_f64());
                     renderer.update(&camera);
-                    renderer.render(&world);
+                    renderer.render(&world,&mut platform);
                 }
                 Event::MainEventsCleared => {
                     // RedrawRequested will only trigger once, unless we manually

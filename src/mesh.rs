@@ -1,39 +1,17 @@
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex{
-    pub pos:[f32;3],
+pub struct Face{
+    pub pos_dir:[u8;4],
     pub texture:u32,
-}
-impl Vertex{
-    pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32;3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-            ],
-        }
-    }
 }
 
 pub struct Mesh{
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
+    pub storage_buffer: wgpu::Buffer,
+    pub bind_group: Option<wgpu::BindGroup>,
     pub num_elements: u32,
 }
 impl Mesh{
-    pub fn unmap(&self){
-        self.vertex_buffer.destroy();
-        self.index_buffer.destroy();
+    pub fn destroy(&self){
+        self.storage_buffer.destroy();
     }
 }

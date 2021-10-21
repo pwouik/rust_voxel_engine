@@ -28,7 +28,7 @@ pub const IMAGES:[&str;3]=["textures\\grass_side.png","textures\\grass_top.png",
 pub struct Renderer {
     surface: wgpu::Surface,
     config:wgpu::SurfaceConfiguration,
-    device: wgpu::Device,
+    pub device: wgpu::Device,
     queue: wgpu::Queue,
     egui_rpass:RenderPass,
     fovy: Deg<f32>,
@@ -43,6 +43,7 @@ pub struct Renderer {
     uniform: Uniform,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    pub chunk_bind_group_layout: wgpu::BindGroupLayout,
     #[allow(dead_code)]
     depth_texture: Texture,
 }
@@ -187,7 +188,21 @@ impl Renderer {
             }],
             label: Some("uniform_bind_group"),
         });
-
+        
+        let chunk_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("chunk_bind_group_layout"),
+            });
         let vs_module = unsafe{device.create_shader_module_spirv(&wgpu::include_spirv_raw!("vertex.spv"))};
         let fs_module = unsafe{device.create_shader_module_spirv(&wgpu::include_spirv_raw!("fragment.spv"))};
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
@@ -195,7 +210,7 @@ impl Renderer {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
+                bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout ,&chunk_bind_group_layout],
                 push_constant_ranges: &[wgpu::PushConstantRange{
                     stages: wgpu::ShaderStages::VERTEX,
                     range: 0..12
@@ -208,7 +223,7 @@ impl Renderer {
             vertex: wgpu::VertexState {
                 module: &vs_module,
                 entry_point: "main",
-                buffers: &[mesh::Vertex::desc()],
+                buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fs_module,
@@ -267,7 +282,17 @@ impl Renderer {
             uniform_bind_group,
             uniform,
             depth_texture,
+            chunk_bind_group_layout
         }
+    }
+    pub fn create_storage_buffer(&self,storage:&Vec<Face>)->wgpu::Buffer{
+        self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Storage Buffer"),
+                contents: bytemuck::cast_slice(&storage),
+                usage: wgpu::BufferUsages::STORAGE,
+            }
+        )
     }
     pub fn create_index_buffer(&self,indices:&Vec<u32>)->wgpu::Buffer{
         self.device.create_buffer_init(
@@ -275,15 +300,6 @@ impl Renderer {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(&indices),
                 usage: wgpu::BufferUsages::INDEX,
-            }
-        )
-    }
-    pub fn create_vertex_buffer(&self,vertices:&Vec<Vertex>)->wgpu::Buffer{
-        self.device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
             }
         )
     }
@@ -353,10 +369,11 @@ impl Renderer {
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
 
             for (pos,mesh) in &world.mesh_map {
-                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX,0,bytemuck::cast_slice(&[pos.x<<5,pos.y<<5,pos.z<<5]));
-                render_pass.set_index_buffer(mesh.index_buffer.slice(..),wgpu::IndexFormat::Uint32);
-                render_pass.set_vertex_buffer(0,mesh.vertex_buffer.slice(..));
-                render_pass.draw_indexed(0..mesh.num_elements,0,0..1);
+                if let Some(bind_group)=&mesh.bind_group {
+                    render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::cast_slice(&[pos.x << 5, pos.y << 5, pos.z << 5]));
+                    render_pass.set_bind_group(2, bind_group, &[]);
+                    render_pass.draw(0..mesh.num_elements, 0..1);
+                }
             }
         }
         self.queue.submit(iter::once(encoder.finish()));

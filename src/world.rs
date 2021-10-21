@@ -8,56 +8,9 @@ use crate::camera::Camera;
 use crate::block::Block;
 
 const TEXTURE_INDEX:[[u32;6];1]=[[0,0,2,1,0,0]];
-const FACES:[[f32;12];6]= [
-    [0.0, 0.0, 0.0,
-        0.0, 0.0, 1.0,
-        0.0, 1.0, 1.0,
-        0.0, 1.0, 0.0],
-    [1.0, 0.0, 1.0,
-        1.0, 0.0, 0.0,
-        1.0, 1.0, 0.0,
-        1.0, 1.0, 1.0],
-    [0.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        1.0, 0.0, 1.0,
-        0.0, 0.0, 1.0],
-    [0.0, 1.0, 1.0,
-        1.0, 1.0, 1.0,
-        1.0, 1.0, 0.0,
-        0.0, 1.0, 0.0],
-    [1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        1.0, 1.0, 0.0],
-    [0.0, 0.0, 1.0,
-        1.0, 0.0, 1.0,
-        1.0, 1.0, 1.0,
-        0.0, 1.0, 1.0]
-];
-fn add_face(vertices: &mut Vec<Vertex>, indices: &mut Vec<u32>, pos:[f32;3], direction:usize, texture_id:u32){
-    let index:u32 = vertices.len() as u32;
-    indices.push(index);
-    indices.push(index+1);
-    indices.push(index+2);
-    indices.push(index+2);
-    indices.push(index+3);
-    indices.push(index);
-    vertices.push(Vertex{ pos: [
-        pos[0]+FACES[direction][0],
-        pos[1]+FACES[direction][1],
-        pos[2]+FACES[direction][2]], texture:texture_id });
-    vertices.push(Vertex{ pos: [
-        pos[0]+FACES[direction][3],
-        pos[1]+FACES[direction][4],
-        pos[2]+FACES[direction][5]], texture:texture_id });
-    vertices.push(Vertex{ pos: [
-        pos[0]+FACES[direction][6],
-        pos[1]+FACES[direction][7],
-        pos[2]+FACES[direction][8]], texture:texture_id });
-    vertices.push(Vertex{ pos: [
-        pos[0]+FACES[direction][9],
-        pos[1]+FACES[direction][10],
-        pos[2]+FACES[direction][11]], texture:texture_id });
+
+fn add_face(storage: &mut Vec<Face>, pos:[u8;3], direction:usize, texture:u32){
+    storage.push(Face{ pos_dir: [pos[0],pos[1],pos[2],direction as u8], texture})
 }
 pub struct World{
     pub mesh_map:HashMap<Point3<i32>,Mesh>,
@@ -72,9 +25,9 @@ pub fn create_mesh(chunk_map:&HashMap<Point3<i32>,Box<Chunk>>,pos:Point3<i32>,re
         chunk_map.get(&(pos+Vector3::new(1,0,0))),
         chunk_map.get(&(pos+Vector3::new(0,0,1))),
         chunk_map.get(&(pos+Vector3::new(0,1,0)))];
-    let mut indices = Vec::new();
-    let mut vertices = Vec::new();
-    let mut index:usize=0;
+    let mut storage = Vec::new();
+    let mut index =0;
+    //add_face(&mut storage,  [0 as u8,0 as u8,0 as u8], 5,TEXTURE_INDEX[0][5]);
     for y in 0..32 {
         for z in 0..32 {
             for x in 0..32 {
@@ -90,9 +43,9 @@ pub fn create_mesh(chunk_map:&HashMap<Point3<i32>,Box<Chunk>>,pos:Point3<i32>,re
                 }
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut vertices, &mut indices, [x as f32,y as f32,z as f32], 1,TEXTURE_INDEX[0][1]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 1,TEXTURE_INDEX[0][1]);
                     } else {
-                        add_face(&mut vertices, &mut indices, [(x+1) as f32,y as f32,z as f32], 0,TEXTURE_INDEX[0][0]);
+                        add_face(&mut storage,  [(x+1) as u8,y as u8,z as u8], 0,TEXTURE_INDEX[0][0]);
                     }
                 }
 
@@ -107,9 +60,9 @@ pub fn create_mesh(chunk_map:&HashMap<Point3<i32>,Box<Chunk>>,pos:Point3<i32>,re
                 }
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut vertices, &mut indices, [x as f32,y as f32,z as f32], 5,TEXTURE_INDEX[0][5]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 5,TEXTURE_INDEX[0][5]);
                     } else {
-                        add_face(&mut vertices, &mut indices, [x as f32,y as f32,(z+1) as f32], 4,TEXTURE_INDEX[0][4]);
+                        add_face(&mut storage, [x as u8,y as u8,(z+1) as u8], 4,TEXTURE_INDEX[0][4]);
                     }
                 }
 
@@ -124,21 +77,31 @@ pub fn create_mesh(chunk_map:&HashMap<Point3<i32>,Box<Chunk>>,pos:Point3<i32>,re
                 }
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut vertices, &mut indices, [x as f32,y as f32,z as f32], 3,TEXTURE_INDEX[0][3]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 3,TEXTURE_INDEX[0][3]);
                     } else {
-                        add_face(&mut vertices, &mut indices, [x as f32,(y+1) as f32,z as f32], 2,TEXTURE_INDEX[0][2]);
+                        add_face(&mut storage,  [x as u8,(y+1) as u8,z as u8], 2,TEXTURE_INDEX[0][2]);
                     }
                 }
                 index += 1;
             }
         }
     }
-    let vertex_buffer = renderer.create_vertex_buffer(&vertices);
-    let index_buffer = renderer.create_index_buffer(&indices);
+    let storage_buffer = renderer.create_storage_buffer(&storage);
+    let mut bind_group=None;
+    if storage.len()!=0{
+        bind_group = Some(renderer.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &renderer.chunk_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: storage_buffer.as_entire_binding(),
+            }],
+            label: Some("uniform_bind_group"),
+        }));
+    }
     Mesh{
-        vertex_buffer,
-        index_buffer,
-        num_elements: indices.len() as u32,
+        storage_buffer,
+        bind_group,
+        num_elements: storage.len() as u32 *6,
     }
 }
 impl World{
@@ -188,7 +151,7 @@ impl World{
     pub fn update_display(&mut self,renderer:&Renderer){
         for pos in self.chunk_updates.drain(){
             if let Some(mesh)=self.mesh_map.get(&pos){
-                mesh.unmap();
+                mesh.destroy();
             }
             if let Some(chunk)=self.chunk_map.get(&pos){
                 self.mesh_map.insert(pos,create_mesh(&self.chunk_map,pos,renderer));

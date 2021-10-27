@@ -21,19 +21,19 @@ impl Chunk{
             for z in 0..32{
                 for y in 0..32{
                     let world_pos=p3i32_to_f64(pos*32+Vector3::new(x,y,z));
-                    let height=world_pos.y as f64-60.0*ssn.get([world_pos.x/400.0,world_pos.z/400.0]);
-                    if height < -20.0 {
-                        data[(x + (z << 5) + (y << 10)) as usize] = Block { block_type: 1 };
+                    let height=world_pos.y as f64-(60.0*ssn.get([world_pos.x/400.0,world_pos.z/400.0])+30.0*(1.0-ssn.get([world_pos.x/80.0,world_pos.z/80.0]).abs()));
+                    let mut block =Block{block_type:0};
+                    if height < -5.0 {
+                        block=Block{block_type:3};
                     }
-                    else if height > 20.0 {
-                        data[(x + (z << 5) + (y << 10)) as usize] = Block { block_type: 0 };
+                    else if height < -1.0 {
+                        block=Block{block_type:2};
                     }
-                    else if 20.0*ssn.get(p3f64_to_array(world_pos/30.0))<height{
-                        data[(x+(z<<5)+(y<<10)) as usize]=Block{ block_type: 0 };
+                    else if height < 0.0 {
+                        block=Block{block_type:1};
                     }
-                    else {
-                        data[(x+(z<<5)+(y<<10)) as usize]=Block{ block_type: 1 };
-                    }
+                    data[(x+(z<<5)+(y<<10)) as usize]=block;
+                    //(ssn.get(p3f64_to_array(world_pos/90.0)).abs()>0.1 || ssn.get(p3f64_to_array(world_pos/90.0 + Vector3::new(0.0,7.0,0.0))).abs()>0.1)
                 }
             }
         }

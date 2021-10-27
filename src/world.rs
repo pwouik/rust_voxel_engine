@@ -3,11 +3,11 @@ use crate::chunk::*;
 use crate::renderer::*;
 use cgmath::{Vector3, Point3};
 use std::collections::{HashMap, HashSet};
+use crate::block::Block;
 use crate::chunk_loader::*;
 use crate::camera::Camera;
-use crate::block::Block;
 
-const TEXTURE_INDEX:[[u32;6];1]=[[0,0,2,1,0,0]];
+const TEXTURE_INDEX:[[u32;6];3]=[[0,0,2,1,0,0],[2,2,2,2,2,2],[3,3,3,3,3,3]];
 
 fn add_face(storage: &mut Vec<Face>, pos:[u8;3], direction:usize, texture:u32){
     storage.push(Face{ pos_dir: [pos[0],pos[1],pos[2],direction as u8], texture})
@@ -31,55 +31,59 @@ pub fn create_mesh(chunk_map:&HashMap<Point3<i32>,Box<Chunk>>,pos:Point3<i32>,re
     for y in 0..32 {
         for z in 0..32 {
             for x in 0..32 {
-                let b1 = chunk.data[index].is_full_block();
-                let mut b2= false;
+                let block1 = chunk.data[index];
+                let mut block2= Block{ block_type: 0 };
                 if x < 31{
-                    b2 = chunk.data[index + 1].is_full_block();
+                    block2 = chunk.data[index + 1];
                 }
                 else {
                     if let Some(chunk) = adjacent_chunks[0]{
-                        b2=chunk.get_block(0,y,z).is_full_block();
+                        block2=chunk.get_block(0,y,z);
                     }
                 }
+                let b1= block1.is_full_block();
+                let mut b2 = block2.is_full_block();
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 1,TEXTURE_INDEX[0][1]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 1,TEXTURE_INDEX[block1.block_type as usize-1][1]);
                     } else {
-                        add_face(&mut storage,  [(x+1) as u8,y as u8,z as u8], 0,TEXTURE_INDEX[0][0]);
+                        add_face(&mut storage,  [(x+1) as u8,y as u8,z as u8], 0,TEXTURE_INDEX[block2.block_type as usize-1][0]);
                     }
                 }
 
                 if z < 31
                 {
-                    b2 = chunk.data[index + 32].is_full_block();
+                    block2 = chunk.data[index + 32];
                 }
                 else {
                     if let Some(chunk) = adjacent_chunks[1]{
-                        b2=chunk.get_block(x,y,0).is_full_block();
+                        block2=chunk.get_block(x,y,0);
                     }
                 }
+                b2= block2.is_full_block();
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 5,TEXTURE_INDEX[0][5]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 5,TEXTURE_INDEX[block1.block_type as usize-1][5]);
                     } else {
-                        add_face(&mut storage, [x as u8,y as u8,(z+1) as u8], 4,TEXTURE_INDEX[0][4]);
+                        add_face(&mut storage, [x as u8,y as u8,(z+1) as u8], 4,TEXTURE_INDEX[block2.block_type as usize-1][4]);
                     }
                 }
 
                 if y < 31
                 {
-                    b2 = chunk.data[index + 32 * 32].is_full_block();
+                    block2 = chunk.data[index + 32 * 32];
                 }
                 else {
                     if let Some(chunk) = adjacent_chunks[2]{
-                        b2=chunk.get_block(x,0,z).is_full_block();
+                        block2 = chunk.get_block(x,0,z);
                     }
                 }
+                b2= block2.is_full_block();
                 if b1 != b2 {
                     if b1 == true {
-                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 3,TEXTURE_INDEX[0][3]);
+                        add_face(&mut storage,  [x as u8,y as u8,z as u8], 3,TEXTURE_INDEX[block1.block_type as usize-1][3]);
                     } else {
-                        add_face(&mut storage,  [x as u8,(y+1) as u8,z as u8], 2,TEXTURE_INDEX[0][2]);
+                        add_face(&mut storage,  [x as u8,(y+1) as u8,z as u8], 2,TEXTURE_INDEX[block2.block_type as usize-1][2]);
                     }
                 }
                 index += 1;
@@ -153,7 +157,7 @@ impl World{
             if let Some(mesh)=self.mesh_map.get(&pos){
                 mesh.destroy();
             }
-            if let Some(chunk)=self.chunk_map.get(&pos){
+            if let Some(_chunk)=self.chunk_map.get(&pos){
                 self.mesh_map.insert(pos,create_mesh(&self.chunk_map,pos,renderer));
             }
         }

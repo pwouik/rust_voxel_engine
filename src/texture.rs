@@ -1,5 +1,7 @@
 use std::num::NonZeroU32;
 
+use crate::mipmap::*;
+
 use anyhow::*;
 use image::GenericImageView;
 
@@ -64,11 +66,13 @@ impl Texture {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size,
-            mip_level_count: 1,
+            mip_level_count: MIP_LEVEL_COUNT,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
         });
 
         queue.write_texture(

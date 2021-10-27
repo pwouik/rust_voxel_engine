@@ -52,7 +52,7 @@ impl<T:Send+'static,U:Send+'static> ThreadPool<T,U>{
 impl<T:Send+'static,U:Send+'static> Drop for ThreadPool<U,T> {
     fn drop(&mut self) {
         self.running.store(false,Ordering::Relaxed);
-        for i in 0..4{
+        for _i in 0..4{
             self.thread_handles.remove(0).join().unwrap();
         }
     }

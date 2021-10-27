@@ -1,8 +1,10 @@
 use std::{iter, fs};
 use cgmath::prelude::*;
-use crate::{texture, camera::Camera, mesh};
+use crate::{texture, camera::Camera};
 use crate::mesh::*;
 use crate::world::World;
+use crate::texture::Texture;
+use crate::mipmap::*;
 
 use std::path;
 use wgpu::util::DeviceExt;
@@ -14,7 +16,6 @@ use std::num::NonZeroU32;
 use std::time::Instant;
 use egui_wgpu_backend::*;
 use egui_winit_platform::Platform;
-use crate::texture::Texture;
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -23,7 +24,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.5, 0.0,
     0.0, 0.0, 0.5, 1.0,
 );
-pub const IMAGES:[&str;3]=["textures\\grass_side.png","textures\\grass_top.png","textures\\grass_bottom.png"];
+pub const IMAGES:[&str;4]=["textures\\grass_side.png","textures\\grass_top.png","textures\\grass_bottom.png","textures\\stone.png"];
 
 pub struct Renderer {
     surface: wgpu::Surface,
@@ -79,7 +80,7 @@ impl Renderer {
             )
             .await
             .unwrap();
-
+        let mut init_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_preferred_format(&adapter).unwrap(),
@@ -88,7 +89,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::Mailbox,
         };
         surface.configure(&device, &config);
-        let mut egui_rpass = RenderPass::new(&device, config.format, 1);
+        let egui_rpass = RenderPass::new(&device, config.format, 1);
 
         let fovy= Deg(45.0);
         let znear= 0.01;
@@ -105,7 +106,7 @@ impl Renderer {
                             view_dimension: wgpu::TextureViewDimension::D2,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
-                        count: NonZeroU32::new(3),
+                        count: NonZeroU32::new(IMAGES.len() as u32),
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
@@ -125,20 +126,27 @@ impl Renderer {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            compare: None,//(wgpu::CompareFunction::LessEqual),
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: None,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
             ..Default::default()
         });
         let mut textures2 = vec![];
         let mut textures_views = vec![];
-        for i in 0..3{
+        for i in 0..IMAGES.len(){
             let diffuse_bytes = fs::read(IMAGES[i]).expect("texture could not be loaded");
             textures2.push(Texture::from_bytes(&device, &queue, &diffuse_bytes, IMAGES[i]).unwrap());
+            generate_mipmaps(
+                &mut init_encoder,
+                &device,
+                &textures2[i].texture,
+                MIP_LEVEL_COUNT,
+            );
         }
+        queue.submit(Some(init_encoder.finish()));
         let textures = textures2;
-        for i in 0..3{
+        for i in 0..IMAGES.len(){
             textures_views.push(&textures[i].view);
         }
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

@@ -11,7 +11,6 @@ use egui_winit_platform::{Platform, PlatformDescriptor};
 use crate::camera::Camera;
 use crate::renderer::Renderer;
 use crate::inputs::Inputs;
-use crate::chunk::Chunk;
 use crate::world::World;
 
 mod texture;
@@ -24,6 +23,7 @@ mod block;
 mod world;
 mod chunk_loader;
 mod util;
+mod mipmap;
 
 
 fn main() {

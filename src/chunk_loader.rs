@@ -1,4 +1,4 @@
-use cgmath::{Vector3, Point3};
+use cgmath::{Vector3, Point3, vec3};
 use std::collections::{HashSet, HashMap};
 use crate::chunk::Chunk;
 use crate::util::threadpool::ThreadPool;
@@ -45,25 +45,25 @@ impl ChunkLoader{
     }
     pub fn tick(&mut self, chunk_map:&HashMap<Point3<i32>,Box<Chunk>>, player_pos:Point3<i32>){
         for y in (-RENDER_DIST_HEIGHT..0).rev() {
-            self.try_load(player_pos,Vector3::new(0,y,0),chunk_map);
+            self.try_load(player_pos,vec3(0,y,0),chunk_map);
         }
         for y in 0..RENDER_DIST_HEIGHT {
-            self.try_load(player_pos,Vector3::new(0,y,0),chunk_map);
+            self.try_load(player_pos,vec3(0,y,0),chunk_map);
         }
         for s in 1..RENDER_DIST {
             for x in -s..s {
                 for y in (-RENDER_DIST_HEIGHT..0).rev() {
-                    self.try_load(player_pos,Vector3::new(x,y,s),chunk_map);
-                    self.try_load(player_pos,Vector3::new(s,y,-x),chunk_map);
-                    self.try_load(player_pos,Vector3::new(-x,y,-s),chunk_map);
-                    self.try_load(player_pos,Vector3::new(-s,y,x),chunk_map);
+                    self.try_load(player_pos,vec3(x,y,s),chunk_map);
+                    self.try_load(player_pos,vec3(s,y,-x),chunk_map);
+                    self.try_load(player_pos,vec3(-x,y,-s),chunk_map);
+                    self.try_load(player_pos,vec3(-s,y,x),chunk_map);
                 }
                 for y in 0..RENDER_DIST_HEIGHT
                 {
-                    self.try_load(player_pos,Vector3::new(x,y,s),chunk_map);
-                    self.try_load(player_pos,Vector3::new(s,y,-x),chunk_map);
-                    self.try_load(player_pos,Vector3::new(-x,y,-s),chunk_map);
-                    self.try_load(player_pos,Vector3::new(-s,y,x),chunk_map);
+                    self.try_load(player_pos,vec3(x,y,s),chunk_map);
+                    self.try_load(player_pos,vec3(s,y,-x),chunk_map);
+                    self.try_load(player_pos,vec3(-x,y,-s),chunk_map);
+                    self.try_load(player_pos,vec3(-s,y,x),chunk_map);
                 }
             }
         }

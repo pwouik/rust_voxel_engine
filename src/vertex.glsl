@@ -6,6 +6,7 @@ struct Face
 {
     int pos_dir;
     int texture;
+    int light;
 };
 layout(set = 2,binding = 0) readonly buffer faces_buffer
 {
@@ -13,12 +14,13 @@ layout(set = 2,binding = 0) readonly buffer faces_buffer
 };
 layout(location = 0) out vec2 tex_coord;
 layout(location = 1) flat out uint tex_id;
+layout(location = 2) flat out uint light;
 
 const vec2 uv[4] = vec2[4](
-    vec2(0.0,1.0),
     vec2(1.0,1.0),
-    vec2(1.0,0.0),
-    vec2(0.0,0.0));
+    vec2(0.0,1.0),
+    vec2(0.0,0.0),
+    vec2(1.0,0.0));
 
 const vec3 FACES[24]=vec3[24](
     vec3(0.0, 0.0, 0.0),
@@ -29,22 +31,22 @@ const vec3 FACES[24]=vec3[24](
     vec3(1.0, 0.0, 0.0),
     vec3(1.0, 1.0, 0.0),
     vec3(1.0, 1.0, 1.0),
+    vec3(1.0, 0.0, 0.0),
+    vec3(0.0, 0.0, 0.0),
+    vec3(0.0, 1.0, 0.0),
+    vec3(1.0, 1.0, 0.0),
+    vec3(0.0, 0.0, 1.0),
+    vec3(1.0, 0.0, 1.0),
+    vec3(1.0, 1.0, 1.0),
+    vec3(0.0, 1.0, 1.0),
+    vec3(0.0, 0.0, 1.0),
     vec3(0.0, 0.0, 0.0),
     vec3(1.0, 0.0, 0.0),
     vec3(1.0, 0.0, 1.0),
-    vec3(0.0, 0.0, 1.0),
+    vec3(0.0, 1.0, 0.0),
     vec3(0.0, 1.0, 1.0),
     vec3(1.0, 1.0, 1.0),
-    vec3(1.0, 1.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(1.0, 0.0, 0.0),
-    vec3(0.0, 0.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(1.0, 1.0, 0.0),
-    vec3(0.0, 0.0, 1.0),
-    vec3(1.0, 0.0, 1.0),
-    vec3(1.0, 1.0, 1.0),
-    vec3(0.0, 1.0, 1.0)
+    vec3(1.0, 1.0, 0.0)
 );
 
 const int INDICES[6] = int[6](0,1,2,2,3,0);
@@ -57,4 +59,5 @@ void main()
     gl_Position = view_proj * (vec4(pos+vec3(pos_dir&0x000000FF,pos_dir>>8&0x000000FF,pos_dir>>16&0x000000FF)+FACES[(pos_dir>>24&0x000000FF)*4+face_vertex_id], 1.0));
     tex_coord = uv[face_vertex_id];
     tex_id = faces_data[face_id].texture;
+    light = faces_data[face_id].light;
 }

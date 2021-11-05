@@ -9,8 +9,8 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     let x = i32(vertex_index) / 2;
     let y = i32(vertex_index) & 1;
     let tc = vec2<f32>(
-        f32(x),
-        f32(y)
+        f32(x)*2.0,
+        f32(y)*2.0
     );
     out.position = vec4<f32>(
         tc.x * 2.0 - 1.0,

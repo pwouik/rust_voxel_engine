@@ -3,6 +3,7 @@
 pub struct Face{
     pub pos_dir:[u8;4],
     pub texture:u32,
+    pub light:[u8;4],
 }
 
 pub struct Mesh{

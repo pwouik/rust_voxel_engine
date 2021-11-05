@@ -1,0 +1,5 @@
+chunk map cache
+frustrum culling
+occlusion culling
+physics
+break place blocks

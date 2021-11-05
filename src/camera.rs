@@ -1,7 +1,7 @@
 use winit::{
     event::*,
 };
-use cgmath::{Rad, Point3, Matrix4, Vector3};
+use cgmath::{Rad, Point3, Matrix4, Vector3, vec3};
 use crate::inputs::*;
 use cgmath::num_traits::clamp;
 
@@ -17,7 +17,7 @@ impl Camera {
 
     pub fn new(speed: f32) -> Self {
         Self {
-            pos: (0.0, 0.0, 0.0).into(),
+            pos: (0.0, 50.0, 0.0).into(),
             velocity: (0.0, 0.0, 0.0).into(),
             yaw: Rad(0.0),
             pitch: Rad(0.0),
@@ -28,7 +28,7 @@ impl Camera {
     pub fn build_view_matrix(&self) -> cgmath::Matrix4<f32> {
         Matrix4::look_to_rh(
             self.pos,
-            Vector3::new(
+            vec3(
                 self.yaw.0.cos()*self.pitch.0.cos(),
                 self.pitch.0.sin(),
                 self.yaw.0.sin()*self.pitch.0.cos(),
@@ -40,23 +40,23 @@ impl Camera {
     pub fn update(&mut self,inputs:&Inputs) {
 
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
-            self.velocity += Vector3::new(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
+            self.velocity += vec3(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::S as usize] {
-            self.velocity += -Vector3::new(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
+            self.velocity += -vec3(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
         }
 
         if inputs.keyboard[VirtualKeyCode::D as usize] {
-            self.velocity += Vector3::new(-self.yaw.0.sin(),0.0,self.yaw.0.cos())*self.speed;
+            self.velocity += vec3(-self.yaw.0.sin(),0.0,self.yaw.0.cos())*self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::Q as usize] {
-            self.velocity += Vector3::new(self.yaw.0.sin(),0.0,-self.yaw.0.cos())*self.speed;
+            self.velocity += vec3(self.yaw.0.sin(),0.0,-self.yaw.0.cos())*self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::R as usize] {
-            self.velocity.y -= 0.1;
+            self.velocity.y -= self.speed.min(0.1);
         }
         if inputs.keyboard[VirtualKeyCode::Space as usize] {
-            self.velocity.y += 0.1;
+            self.velocity.y += self.speed.min(0.1);
         }
         if inputs.keyboard[VirtualKeyCode::W as usize] {
             self.speed/=1.01;

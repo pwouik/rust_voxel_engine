@@ -1,3 +1,4 @@
+#![feature(hash_drain_filter)]
 use std::time::Instant;
 use egui::FontDefinitions;
 use winit::{
@@ -24,7 +25,7 @@ mod world;
 mod chunk_loader;
 mod util;
 mod mipmap;
-
+mod region;
 
 fn main() {
     env_logger::init();
@@ -44,7 +45,7 @@ fn main() {
     let mut camera = Camera::new(0.1);
     let mut inputs = Inputs::new();
     let mut world= World::new();
-    camera.update(&inputs);
+    camera.update(&inputs,&mut world);
     renderer.update(&camera);
     let mut counter:i32=0;
     let start_time=Instant::now();
@@ -57,7 +58,9 @@ fn main() {
                     window_id,
                 }if window_id == window.id() => {
                     match event {
-                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        WindowEvent::CloseRequested => {
+                            *control_flow = ControlFlow::Exit;
+                        },
                         WindowEvent::KeyboardInput { input, .. } => match input {
                             KeyboardInput {
                                 state: ElementState::Pressed,
@@ -84,16 +87,18 @@ fn main() {
                 Event::MainEventsCleared => {
                     // RedrawRequested will only trigger once, unless we manually
                     // request it.
+                    camera.update(&inputs,&mut world);
+                    inputs.reset();
+                    counter+=1;
+                    world.update_display(&renderer);
+                    if counter%3==0{
+                        world.tick(&renderer,&camera);
+                    }
                     window.request_redraw();
+                    profiling::finish_frame!()
                 }
                 _ => {}
             }
-        }
-        camera.update(&inputs);
-        counter+=1;
-        world.update_display(&renderer);
-        if counter%3==0{
-            world.tick(&renderer,&camera);
         }
     });
 }

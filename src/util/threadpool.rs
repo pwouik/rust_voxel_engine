@@ -3,18 +3,18 @@ use std::sync::{mpsc, Arc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::TryRecvError;
-use crossbeam::channel;
+use std::sync::mpsc::{TryRecvError};
+use crossbeam_channel;
 
 pub struct ThreadPool<T:Send+'static,U:Send+'static>{
-    sender:crossbeam::channel::Sender<T>,
-    receiver:mpsc::Receiver<U>,
+    sender:crossbeam_channel::Sender<T>,
+    sender_thread:mpsc::Sender<U>,
     thread_handles:Vec<JoinHandle<()>>,
     running:Arc<AtomicBool>
 }
 impl<T:Send+'static,U:Send+'static> ThreadPool<T,U>{
-    pub fn new(function:fn(T)->U)->Self{
-        let (sender,receiver_thread) = channel::bounded(30) as (channel::Sender<T>,channel::Receiver<T>);
+    pub fn new(function:fn(T)->U)->(mpsc::Receiver<U>,Self){
+        let (sender,receiver_thread) = crossbeam_channel::unbounded() as (crossbeam_channel::Sender<T>,crossbeam_channel::Receiver<T>);
         let (sender_thread,receiver) = mpsc::channel() as (mpsc::Sender<U>,mpsc::Receiver<U>);
         let mut thread_handles=Vec::new();
         let running = Arc::new(AtomicBool::new(true));
@@ -35,18 +35,19 @@ impl<T:Send+'static,U:Send+'static> ThreadPool<T,U>{
                 }
             }));
         }
+        (receiver,
         ThreadPool{
             sender,
-            receiver,
+            sender_thread,
             thread_handles,
             running
-        }
+        })
     }
-    pub fn send(&mut self, input:T) -> Result<(), channel::TrySendError<T>> {
+    pub fn send(&mut self, input:T) -> Result<(), crossbeam_channel::TrySendError<T>> {
         self.sender.try_send(input)
     }
-    pub fn get(&mut self) -> Result<U, TryRecvError> {
-        self.receiver.try_recv()
+    pub fn pass(&mut self,output:U){
+        self.sender_thread.send(output);
     }
 }
 impl<T:Send+'static,U:Send+'static> Drop for ThreadPool<U,T> {
@@ -55,5 +56,6 @@ impl<T:Send+'static,U:Send+'static> Drop for ThreadPool<U,T> {
         for _i in 0..4{
             self.thread_handles.remove(0).join().unwrap();
         }
+        println!("threadpool joined");
     }
 }

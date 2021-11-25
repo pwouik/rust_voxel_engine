@@ -7,6 +7,7 @@ pub struct Inputs{
     pub mouse_pos_y:f64,
     pub mouse_motion_x:f64,
     pub mouse_motion_y:f64,
+    pub mouse_button_states:[bool;3]
 }
 impl Inputs{
     pub fn new() ->Self{
@@ -15,12 +16,15 @@ impl Inputs{
             mouse_pos_x: 0.0,
             mouse_pos_y: 0.0,
             mouse_motion_x: 0.0,
-            mouse_motion_y: 0.0
+            mouse_motion_y: 0.0,
+            mouse_button_states: [false,false,false]
         }
     }
-    pub fn update(&mut self, event:&Event<()>,window :&Window) ->bool{
+    pub fn reset(&mut self){
         self.mouse_motion_x=0.0;
         self.mouse_motion_y=0.0;
+    }
+    pub fn update(&mut self, event:&Event<()>,window :&Window) ->bool{
         match event {
             Event::DeviceEvent{
                 ref event,
@@ -49,6 +53,20 @@ impl Inputs{
                 window_id,
             }if *window_id == window.id() => {
                 match event {
+                    WindowEvent::MouseInput {state,button,..}=>{
+                        let mut bool_state;
+                        match state{
+                            ElementState::Pressed=>{bool_state = true;}
+                            _=>{bool_state=false;}
+                        }
+                        match button{
+                            MouseButton::Left=>{self.mouse_button_states[0]=bool_state;}
+                            MouseButton::Middle=>{self.mouse_button_states[1]=bool_state;}
+                            MouseButton::Right=>{self.mouse_button_states[2]=bool_state;}
+                            _=>{}
+                        }
+                        true
+                    }
                     WindowEvent::CursorMoved {
                         position,
                         ..

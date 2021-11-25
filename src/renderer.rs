@@ -126,7 +126,7 @@ impl Renderer {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Linear,
             compare: None,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
@@ -329,6 +329,8 @@ impl Renderer {
         );
     }
 
+
+    #[profiling::function]
     pub fn render(&mut self, world:&World, platform: &mut Platform){
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
@@ -385,41 +387,40 @@ impl Renderer {
             }
         }
         self.queue.submit(iter::once(encoder.finish()));
+        {
+            platform.begin_frame();
+            egui::Window::new("Info").show(&platform.context(), |ui| {
+                ui.label(format!("render time:{}", render_time.elapsed().as_millis()));
+            });
+            let (_output, paint_commands) = platform.end_frame(None);
+            let paint_jobs = platform.context().tessellate(paint_commands);
 
+            let mut encoder_gui = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Egui encoder"),
+            });
+            // Upload all resources for the GPU.
+            let screen_descriptor = ScreenDescriptor {
+                physical_width: self.config.width,
+                physical_height: self.config.height,
+                scale_factor: 1.0,
+            };
+            self.egui_rpass.update_texture(&self.device, &self.queue, &platform.context().texture());
+            self.egui_rpass.update_user_textures(&self.device, &self.queue);
+            self.egui_rpass.update_buffers(&self.device, &self.queue, &paint_jobs, &screen_descriptor);
 
-        platform.begin_frame();
-        egui::Window::new("Info").show(&platform.context(), |ui| {
-            ui.label(format!("render time:{}",render_time.elapsed().as_millis()));
-        });
-        let (_output, paint_commands) = platform.end_frame(None);
-        let paint_jobs = platform.context().tessellate(paint_commands);
-
-        let mut encoder_gui = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Egui encoder"),
-        });
-        // Upload all resources for the GPU.
-        let screen_descriptor = ScreenDescriptor {
-            physical_width: self.config.width,
-            physical_height: self.config.height,
-            scale_factor: 1.0,
-        };
-        self.egui_rpass.update_texture(&self.device, &self.queue, &platform.context().texture());
-        self.egui_rpass.update_user_textures(&self.device, &self.queue);
-        self.egui_rpass.update_buffers(&self.device, &self.queue, &paint_jobs, &screen_descriptor);
-
-        // Record all render passes.
-        self.egui_rpass
-            .execute(
-                &mut encoder_gui,
-                &view,
-                &paint_jobs,
-                &screen_descriptor,
-                None,
-            )
-            .unwrap();
-        // Submit the commands.
-        self.queue.submit(iter::once(encoder_gui.finish()));
-
+            // Record all render passes.
+            self.egui_rpass
+                .execute(
+                    &mut encoder_gui,
+                    &view,
+                    &paint_jobs,
+                    &screen_descriptor,
+                    None,
+                )
+                .unwrap();
+            // Submit the commands.
+            self.queue.submit(iter::once(encoder_gui.finish()));
+        }
         frame.present();
 
     }

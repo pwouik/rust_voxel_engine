@@ -12,10 +12,15 @@ pub struct Chunk{
     pub data:[Block;32*32*32],
 }
 impl Chunk{
-    pub fn new(pos:Point3<i32>)->Chunk{
-        let mut data:[Block;32*32*32]=unsafe {
-            std::mem::MaybeUninit::uninit().assume_init()
-        };
+    #[profiling::function]
+    pub fn new()->Self {
+        let mut data: [Block; 32 * 32 * 32] = [Block { block_type: 0 }; 32 * 32 * 32];
+        Chunk{
+            data
+        }
+    }
+    #[profiling::function]
+    pub fn generate(&mut self,pos:Point3<i32>){
         let ssn= SuperSimplex::new();
         for x in 0..32 {
             for z in 0..32{
@@ -31,14 +36,14 @@ impl Chunk{
                     }
                     else if height < 0.0 {
                         block=Block{block_type:1};
-                    }
-                    data[(x+(z<<5)+(y<<10)) as usize]=block;
+                    }/*
+                    if ssn.get(p3f64_to_array(world_pos/90.0)).abs()+ssn.get(p3f64_to_array(world_pos/90.0 + vec3(0.0,7.0,0.0))).abs()<0.1 {
+                        block=Block{block_type:0};
+                    }*/
+                    self.data[(x + (z << 5) + (y << 10)) as usize] = block;
                     //(ssn.get(p3f64_to_array(world_pos/90.0)).abs()>0.1 || ssn.get(p3f64_to_array(world_pos/90.0 + vec3(0.0,7.0,0.0))).abs()>0.1)
                 }
             }
-        }
-        Chunk{
-            data
         }
     }
     pub fn get_block(&self,pos:Point3<u32>) ->Block{self.data[ (pos.x+(pos.z<<5)+(pos.y<<10)) as usize]}

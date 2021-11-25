@@ -4,6 +4,8 @@ use winit::{
 use cgmath::{Rad, Point3, Matrix4, Vector3, vec3};
 use crate::inputs::*;
 use cgmath::num_traits::clamp;
+use crate::block::Block;
+use crate::world::World;
 
 pub struct Camera {
     pub pos: Point3<f32>,
@@ -37,8 +39,9 @@ impl Camera {
         )
     }
 
-    pub fn update(&mut self,inputs:&Inputs) {
-
+    pub fn update(&mut self,inputs:&Inputs,world:&mut World) {
+        self.pitch = clamp(self.pitch+Rad((-inputs.mouse_motion_y / 200.0) as f32),Rad(-1.5),Rad(1.5));
+        self.yaw += Rad((inputs.mouse_motion_x / 200.0) as f32);
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
             self.velocity += vec3(self.yaw.0.cos(),0.0,self.yaw.0.sin())*self.speed;
         }
@@ -64,9 +67,21 @@ impl Camera {
         if inputs.keyboard[VirtualKeyCode::X as usize] {
             self.speed*=1.01;
         }
+        if inputs.mouse_button_states[0]{
+            world.set_block(world.raycast(self.pos,vec3(
+                self.yaw.0.cos()*self.pitch.0.cos(),
+                self.pitch.0.sin(),
+                self.yaw.0.sin()*self.pitch.0.cos(),
+            ),false),Block{block_type:0});
+        }
+        if inputs.mouse_button_states[2]{
+            world.set_block(world.raycast(self.pos,vec3(
+                self.yaw.0.cos()*self.pitch.0.cos(),
+                self.pitch.0.sin(),
+                self.yaw.0.sin()*self.pitch.0.cos(),
+            ),true),Block{block_type:3});
+        }
         self.pos+=self.velocity;
         self.velocity*=0.8;
-        self.pitch = clamp(self.pitch+Rad((-inputs.mouse_motion_y / 200.0) as f32),Rad(-1.5),Rad(1.5));
-        self.yaw += Rad((inputs.mouse_motion_x / 200.0) as f32);
     }
 }

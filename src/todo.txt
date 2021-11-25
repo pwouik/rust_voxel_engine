@@ -1,5 +1,10 @@
-chunk map cache
+chunk map access cache
 frustrum culling
 occlusion culling
-physics
-break place blocks
+basic physics
+gpu meshing
+file save
+
+entities
+block interactions
+multiplayer

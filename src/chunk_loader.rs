@@ -6,6 +6,7 @@ use std::thread::JoinHandle;
 use std::thread;
 use std::time::Duration;
 use crate::chunk::Chunk;
+use crate::chunk_map::ChunkMap;
 use crate::region::Region;
 use crate::util::threadpool::ThreadPool;
 
@@ -89,9 +90,9 @@ impl ChunkLoader{
             running
         }
     }
-    pub fn try_load(&mut self,player_pos:Point3<i32>, pos:Vector3<i32>, chunk_map:&HashMap<Point3<i32>,Box<Chunk>>){
+    pub fn try_load(&mut self,player_pos:Point3<i32>, pos:Vector3<i32>, chunk_map:&ChunkMap){
         let chunk_pos=player_pos+pos;
-        if !self.loading_chunks.contains(&chunk_pos) && chunk_map.get(&chunk_pos).is_none(){
+        if !self.loading_chunks.contains(&chunk_pos) && chunk_map.get_chunk(chunk_pos).is_none(){
             if self.load_sender.send(chunk_pos).is_ok(){
                 self.loading_chunks.insert(chunk_pos);
             }
@@ -112,7 +113,7 @@ impl ChunkLoader{
         }
     }
     #[profiling::function]
-    pub fn tick(&mut self, chunk_map:&HashMap<Point3<i32>,Box<Chunk>>, player_pos:Point3<i32>){
+    pub fn tick(&mut self, chunk_map:&ChunkMap, player_pos:Point3<i32>){
         for y in (-RENDER_DIST_HEIGHT..0).rev() {
             self.try_load(player_pos,vec3(0,y,0),chunk_map);
         }

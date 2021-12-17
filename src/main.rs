@@ -1,4 +1,5 @@
 #![feature(hash_drain_filter)]
+
 use std::time::Instant;
 use egui::FontDefinitions;
 use winit::{
@@ -26,7 +27,8 @@ mod chunk_loader;
 mod util;
 mod mipmap;
 mod region;
-
+mod mesh_builder;
+mod chunk_map;
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -44,7 +46,7 @@ fn main() {
     let mut renderer = block_on(Renderer::new(&window));
     let mut camera = Camera::new(0.1);
     let mut inputs = Inputs::new();
-    let mut world= World::new();
+    let mut world= World::new(&renderer);
     camera.update(&inputs,&mut world);
     renderer.update(&camera);
     let mut counter:i32=0;
@@ -90,7 +92,7 @@ fn main() {
                     camera.update(&inputs,&mut world);
                     inputs.reset();
                     counter+=1;
-                    world.update_display(&renderer);
+                    world.update_display(&mut renderer);
                     if counter%3==0{
                         world.tick(&renderer,&camera);
                     }

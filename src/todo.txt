@@ -1,10 +1,11 @@
-chunk map access cache
 frustrum culling
 occlusion culling
-basic physics
 gpu meshing
-file save
+command optimization
+better thread management
+lz4 chunk compression
 
+physics
 entities
 block interactions
 multiplayer

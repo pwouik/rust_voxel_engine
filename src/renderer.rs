@@ -30,7 +30,7 @@ pub struct Renderer {
     surface: wgpu::Surface,
     config:wgpu::SurfaceConfiguration,
     pub device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub queue: wgpu::Queue,
     egui_rpass:RenderPass,
     fovy: Deg<f32>,
     znear: f32,
@@ -293,7 +293,7 @@ impl Renderer {
             chunk_bind_group_layout
         }
     }
-    pub fn create_storage_buffer(&self,storage:&Vec<Face>)->wgpu::Buffer{
+    pub fn create_face_buffer(&self,storage:&Vec<Face>)->wgpu::Buffer{
         self.device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Storage Buffer"),

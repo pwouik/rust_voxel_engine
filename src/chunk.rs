@@ -22,9 +22,9 @@ impl Chunk{
     #[profiling::function]
     pub fn generate(&mut self,pos:Point3<i32>){
         let ssn= SuperSimplex::new();
-        for x in 0..32 {
-            for z in 0..32{
-                for y in 0..32{
+        for x in 0i32..32 {
+            for z in 0i32..32{
+                for y in 0i32..32{
                     let world_pos=p3i32_to_f64(pos*32+vec3(x,y,z));
                     let height=world_pos.y as f64-(60.0*ssn.get([world_pos.x/400.0,world_pos.z/400.0])+30.0*(1.0-ssn.get([world_pos.x/80.0,world_pos.z/80.0]).abs()));
                     let mut block =Block{block_type:0};

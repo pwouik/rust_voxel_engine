@@ -1,7 +1,7 @@
 frustrum culling
 occlusion culling
 gpu meshing
-command optimization
+draw optimization
 better thread management
 lz4 chunk compression
 

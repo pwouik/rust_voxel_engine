@@ -40,11 +40,7 @@ impl ChunkLoader{
                 match save_receiver.try_recv(){
                     Ok(chunk)=>{
                         let region_pos :Point3<i32>= point3(chunk.0.x>>4,chunk.0.y>>2,chunk.0.z>>4);
-                        let region = region_map.get(&region_pos);
-                        if region.is_none() {
-                            region_map.insert(region_pos, Box::new(Region::new(String::from("save"),region_pos)));
-                        }
-                        let mut region = region_map.get_mut(&region_pos).unwrap();
+                        let region = region_map.get_mut(&region_pos).unwrap();//region should be created when the chunk is generated
                         region.save_chunk(chunk.1,chunk.0);
                         if region.chunk_count==0{
                             region_map.remove(&region_pos);
@@ -59,19 +55,21 @@ impl ChunkLoader{
                             match load_receiver.try_recv() {
                                 Ok(pos) => {
                                     let region_pos: Point3<i32> = point3(pos.x >> 4, pos.y >> 2, pos.z >> 4);
-                                    let region = region_map.get_mut(&region_pos);
-                                    if let Some(mut region) = region
-                                    {
-                                        match region.load_chunk(pos) {
-                                            Some(chunk) => {
-                                                threadpool.pass((pos, chunk));
-                                            }
-                                            None => {
-                                                threadpool.send(pos);
-                                            }
+                                    let region_option = region_map.get_mut(&region_pos);
+                                    let region = match region_option {
+                                        Some(region)=>{region}
+                                        None=>{
+                                            region_map.insert(region_pos, Box::new(Region::new(String::from("save"),region_pos)));
+                                            region_map.get_mut(&region_pos).unwrap()
                                         }
-                                    } else {
-                                        threadpool.send(pos);
+                                    };
+                                    match region.load_chunk(pos) {
+                                        Some(chunk) => {
+                                            threadpool.pass((pos, chunk));
+                                        }
+                                        None => {
+                                            threadpool.send(pos);
+                                        }
                                     }
                                 }
                                 _ => {break;}

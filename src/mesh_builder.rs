@@ -161,7 +161,7 @@ impl MeshBuilder
                 cpass.set_pipeline(&self.compute_pipeline);
                 cpass.set_bind_group(0, &bind_group, &[]);
                 cpass.insert_debug_marker("generate chunk mesh");
-                cpass.dispatch(4, 4, 4);
+                cpass.dispatch(1, 1, 32);
             }
             encoder.copy_buffer_to_buffer(&atomic_buffer, 0, &self.buffers[self.count].1, 0, 4);
             renderer.queue.submit(Some(encoder.finish()));
@@ -217,6 +217,11 @@ impl MeshBuilder
                         self.tasks_results.swap_remove(i);
                         self.buffers.swap_remove(i);
                         self.count-=1;
+                        let s:i32=0;
+                        match s {
+                            1=>{}
+                            _ => {}
+                        }
                     }
                     else{
                         result.unwrap()

@@ -81,12 +81,12 @@ impl World{
     }
     #[profiling::function]
     pub fn update_display(&mut self,renderer:&mut Renderer){
-        let mut free = 20-self.mesh_builder.get_computing_meshes() as isize;
+        /*let mut free = 8-self.mesh_builder.get_computing_meshes() as isize;
         let positions :Vec<Point3<i32>>= self.chunk_updates.drain_filter(|_|{free-=1;free>0}).collect();
         for pos in positions{
             self.mesh_builder.mesh_chunk(pos,&self.chunk_map,renderer)
-        }
-        /*let positions :Vec<Point3<i32>> = self.chunk_updates.drain().collect();
+        }*/
+        let positions :Vec<Point3<i32>> = self.chunk_updates.drain().collect();
         for pos in positions{
             if self.chunk_map.get_chunk(pos).is_some(){
                 if let Some(mesh)=self.mesh_map.get(&pos){
@@ -94,7 +94,7 @@ impl World{
                 }
                 self.mesh_map.insert(pos,self.create_mesh(pos,renderer));
             }
-        }*/
+        }
         self.mesh_builder.check_for_meshes(&mut self.mesh_map,&renderer);
     }
     #[profiling::function]

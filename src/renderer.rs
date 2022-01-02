@@ -93,7 +93,7 @@ impl Renderer {
 
         let fovy= Deg(45.0);
         let znear= 0.01;
-        let zfar = 1000.0;
+        let zfar = 10000.0;
         let projection = OPENGL_TO_WGPU_MATRIX * perspective(fovy, config.width as f32 / config.height as f32, znear, zfar);
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -331,7 +331,8 @@ impl Renderer {
 
 
     #[profiling::function]
-    pub fn render(&mut self, world:&World, platform: &mut Platform){
+    pub fn render(&mut self, world:&World, platform: &mut Platform,camera:&Camera){
+        let camera_pos = point3((camera.pos.x/32.0).floor() as i32,(camera.pos.y/32.0).floor() as i32,(camera.pos.z/32.0).floor() as i32);
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
@@ -377,10 +378,10 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
 
             render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
-
             for (pos,mesh) in &world.mesh_map {
                 if let Some(bind_group)=&mesh.bind_group {
-                    render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::cast_slice(&[pos.x << 5, pos.y << 5, pos.z << 5]));
+                    let rel_pos =  pos-camera_pos;
+                    render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::cast_slice(&[rel_pos.x << 5, rel_pos.y << 5, rel_pos.z << 5]));
                     render_pass.set_bind_group(2, bind_group, &[]);
                     render_pass.draw(0..mesh.num_elements, 0..1);
                 }

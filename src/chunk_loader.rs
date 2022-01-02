@@ -10,7 +10,7 @@ use crate::chunk_map::ChunkMap;
 use crate::region::Region;
 use crate::util::threadpool::ThreadPool;
 
-pub const RENDER_DIST:i32=10;
+pub const RENDER_DIST:i32=50;
 pub const RENDER_DIST_HEIGHT:i32=4;
 
 pub struct ChunkLoader{
@@ -30,7 +30,7 @@ impl ChunkLoader{
             (pos, chunk)
         });
         let loading_chunks = HashSet::new();
-        let (load_sender,load_receiver) = crossbeam_channel::bounded(20) as (crossbeam_channel::Sender<Point3<i32>>,crossbeam_channel::Receiver<Point3<i32>>);
+        let (load_sender,load_receiver) = crossbeam_channel::bounded(60) as (crossbeam_channel::Sender<Point3<i32>>,crossbeam_channel::Receiver<Point3<i32>>);
         let (save_sender,save_receiver) = mpsc::channel() as (mpsc::Sender<(Point3<i32>,Box<Chunk>)>,mpsc::Receiver<(Point3<i32>,Box<Chunk>)>);
         let running = Arc::new(AtomicBool::new(true));
         let loc_running = running.clone();
@@ -68,7 +68,7 @@ impl ChunkLoader{
                                             threadpool.pass((pos, chunk));
                                         }
                                         None => {
-                                            threadpool.send(pos);
+                                            threadpool.send(pos).unwrap();
                                         }
                                     }
                                 }
@@ -90,14 +90,14 @@ impl ChunkLoader{
     }
     pub fn try_load(&mut self,player_pos:Point3<i32>, pos:Vector3<i32>, chunk_map:&ChunkMap){
         let chunk_pos=player_pos+pos;
-        if !self.loading_chunks.contains(&chunk_pos) && chunk_map.get_chunk(chunk_pos).is_none(){
+        if self.loading_chunks.len()<60 && !self.loading_chunks.contains(&chunk_pos) && chunk_map.get_chunk(chunk_pos).is_none(){
             if self.load_sender.send(chunk_pos).is_ok(){
                 self.loading_chunks.insert(chunk_pos);
             }
         }
     }
     pub fn save(&mut self,chunk:(Point3<i32>,Box<Chunk>)){
-        self.save_sender.send(chunk);
+        self.save_sender.send(chunk).unwrap();
     }
     pub fn try_get_chunk(&mut self) -> Option<(Point3<i32>, Box<Chunk>)> {
         let result=self.threadpool_receiver.try_recv();

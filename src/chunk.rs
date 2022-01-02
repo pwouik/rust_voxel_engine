@@ -1,5 +1,5 @@
 use crate::block::*;
-use cgmath::{Point3, point3, vec3, Vector3};
+use cgmath::{Point3, point3, vec3};
 use noise::{SuperSimplex, NoiseFn};
 
 fn p3i32_to_f64(point:Point3<i32>)->Point3<f64>{
@@ -14,7 +14,7 @@ pub struct Chunk{
 impl Chunk{
     #[profiling::function]
     pub fn new()->Self {
-        let mut data: [Block; 32 * 32 * 32] = [Block { block_type: 0 }; 32 * 32 * 32];
+        let data: [Block; 32 * 32 * 32] = [Block { block_type: 0 }; 32 * 32 * 32];
         Chunk{
             data
         }

@@ -54,11 +54,10 @@ impl Inputs{
             }if *window_id == window.id() => {
                 match event {
                     WindowEvent::MouseInput {state,button,..}=>{
-                        let mut bool_state;
-                        match state{
-                            ElementState::Pressed=>{bool_state = true;}
-                            _=>{bool_state=false;}
-                        }
+                        let bool_state= match state{
+                            ElementState::Pressed=>{true}
+                            _=>{false}
+                        };
                         match button{
                             MouseButton::Left=>{self.mouse_button_states[0]=bool_state;}
                             MouseButton::Middle=>{self.mouse_button_states[1]=bool_state;}

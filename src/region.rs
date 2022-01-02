@@ -1,8 +1,10 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use bytemuck::Contiguous;
 use cgmath::Point3;
 use crate::block::Block;
 use crate::chunk::Chunk;
+use lz4_flex::{compress, decompress};
 
 fn pos_to_id(pos:Point3<i32>)->usize
 {
@@ -29,7 +31,7 @@ impl Region {
                 }
                 open_file
             }
-            Err(error)=> {
+            Err(_)=> {
                 let mut openfile = OpenOptions::new().read(true).write(true).create(true).open(&filename).unwrap();
                 for i in (0..2048).step_by(2){
                     index[i]=8192;
@@ -46,6 +48,33 @@ impl Region {
         }
     }
     #[profiling::function]
+    fn shrink_to_fit(&mut self){
+        let mut pos= 8192;
+        let mut old_pos=0;
+        loop{
+            let mut min =u32::MAX_VALUE;
+            let mut index = 0;
+            for j in (0..2048).step_by(2){
+                if self.index[j]>old_pos && self.index[j]<min && self.index[j+1]!= 0{
+                    min = self.index[j];
+                    index = j;
+                }
+            }
+            if min == u32::MAX_VALUE{break;}
+            old_pos = min;
+            if min!=pos {
+                self.index[index] = pos;
+                let mut buffer = vec![0; 2 + 2 * self.index[index + 1] as usize];
+                self.file.seek(SeekFrom::Start(min as u64)).unwrap();
+                self.file.read_exact(&mut buffer).unwrap();
+                self.file.seek(SeekFrom::Start(pos as u64)).unwrap();
+                self.file.write_all(&mut buffer).unwrap();
+            }
+            pos+=2+2*self.index[index+1];
+        }
+        self.file.set_len(pos as u64).unwrap();
+    }
+    #[profiling::function]
     pub fn save_index(&mut self){
         let mut buffer=vec![0;2048];
         for i in 0..2048{
@@ -55,7 +84,7 @@ impl Region {
         self.file.write_all(bytemuck::cast_slice(&buffer)).unwrap();
     }
     #[profiling::function]
-    pub fn available_space(&self,id:usize)->i32{
+    fn available_space(&self,id:usize)->i32{
         let mut space=i32::MAX;
         for i in (0..2048).step_by(2)
         {
@@ -67,8 +96,9 @@ impl Region {
         return space;
     }
     #[profiling::function]
-    pub fn compress_chunk(chunk:&mut Box<Chunk>) ->Vec<u16>
+    fn compress_chunk(chunk:&mut Box<Chunk>) ->Vec<u16>
     {
+
         let mut compressed_data =vec![];
         let mut i =0;
         while i < 32*32*32
@@ -108,7 +138,7 @@ impl Region {
             for i in 0..data_size as usize - 1{
                 buffer[i+1]=compressed_chunk[i].to_le();
             }
-            self.file.write_all(bytemuck::cast_slice(&buffer));
+            self.file.write_all(bytemuck::cast_slice(&buffer)).unwrap();
         }
         else
         {
@@ -117,7 +147,7 @@ impl Region {
             {
                 buffer[i+1]=chunk.data[i].block_type.to_le();
             }
-            self.file.write_all(bytemuck::cast_slice(&buffer));
+            self.file.write_all(bytemuck::cast_slice(&buffer)).unwrap();
         }
     }
     #[profiling::function]
@@ -133,7 +163,7 @@ impl Region {
         let mut chunk=Box::new(Chunk::new());
         self.file.seek(SeekFrom::Start(self.index[location] as u64)).unwrap();
         let mut buffer=vec![0;data_size*2];
-        self.file.read_exact(&mut buffer);
+        self.file.read_exact(&mut buffer).unwrap();
         if u16::from_le_bytes([buffer[0],buffer[1]])==1
         {
             let mut it =0;
@@ -160,6 +190,7 @@ impl Region {
 }
 impl Drop for Region{
     fn drop(&mut self) {
+        self.shrink_to_fit();
         self.save_index();
     }
 }

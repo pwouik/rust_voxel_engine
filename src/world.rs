@@ -1,14 +1,11 @@
 use crate::mesh::*;
-use crate::chunk::*;
 use crate::renderer::*;
 use cgmath::{Vector3, Point3, point3, vec3};
 use cgmath::EuclideanSpace;
 use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
 use crate::block::Block;
 use crate::chunk_loader::*;
 use crate::camera::Camera;
-use crate::mesh_builder::MeshBuilder;
 use crate::util::direction::*;
 use crate::chunk_map::ChunkMap;
 
@@ -18,24 +15,21 @@ const TEXTURE_INDEX:[[u32;6];3]=[[0,0,0,0,2,1],[2,2,2,2,2,2],[3,3,3,3,3,3]];
 pub struct World{
     pub mesh_map:HashMap<Point3<i32>,Mesh>,
     pub chunk_map:ChunkMap,
-    pub chunk_updates:HashSet<Point3<i32>>,
-    pub chunk_loader:ChunkLoader,
-    mesh_builder:MeshBuilder
+    chunk_updates:HashSet<Point3<i32>>,
+    chunk_loader:ChunkLoader,
 }
 
 impl World{
-    pub fn new(renderer:&Renderer)->World{
+    pub fn new()->World{
         let mesh_map:HashMap<Point3<i32>,Mesh>=HashMap::new();
         let chunk_map=ChunkMap::new();
         let chunk_loader=ChunkLoader::new();
         let chunk_updates= HashSet::new();
-        let mesh_builder=MeshBuilder::new(renderer);
         World{
             mesh_map,
             chunk_map,
             chunk_loader,
-            chunk_updates,
-            mesh_builder
+            chunk_updates
         }
     }
     #[profiling::function]
@@ -73,7 +67,7 @@ impl World{
         });
     }
     #[profiling::function]
-    pub fn tick(&mut self,renderer:&Renderer,camera:&Camera){
+    pub fn tick(&mut self,camera:&Camera){
         let player_pos= point3((camera.pos.x/32.0) as i32,(camera.pos.y/32.0) as i32,(camera.pos.z/32.0) as i32);
         self.unload_chunks(player_pos);
         self.chunk_loader.tick(&self.chunk_map,player_pos);
@@ -81,11 +75,6 @@ impl World{
     }
     #[profiling::function]
     pub fn update_display(&mut self,renderer:&mut Renderer){
-        /*let mut free = 8-self.mesh_builder.get_computing_meshes() as isize;
-        let positions :Vec<Point3<i32>>= self.chunk_updates.drain_filter(|_|{free-=1;free>0}).collect();
-        for pos in positions{
-            self.mesh_builder.mesh_chunk(pos,&self.chunk_map,renderer)
-        }*/
         let positions :Vec<Point3<i32>> = self.chunk_updates.drain().collect();
         for pos in positions{
             if self.chunk_map.get_chunk(pos).is_some(){
@@ -95,7 +84,6 @@ impl World{
                 self.mesh_map.insert(pos,self.create_mesh(pos,renderer));
             }
         }
-        self.mesh_builder.check_for_meshes(&mut self.mesh_map,&renderer);
     }
     #[profiling::function]
     fn add_face(&self,storage: &mut Vec<Face>, pos:Point3<i32>,chunk_pos:Point3<i32>, dir:Direction, texture:u32){

@@ -1,11 +1,16 @@
+1.
 frustrum culling
 occlusion culling
-gpu meshing
 draw optimization
 better thread management
 lz4 chunk compression
-
+2.
+gpu noise
 physics
 entities
 block interactions
 multiplayer
+non full blocks
+
+failed:
+gpu meshing

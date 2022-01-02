@@ -1,7 +1,7 @@
 use winit::{
     event::*,
 };
-use cgmath::{Rad, Point3, Matrix4, Vector3, vec3};
+use cgmath::{Rad, Point3, Matrix4, Vector3, vec3, point3};
 use crate::inputs::*;
 use cgmath::num_traits::clamp;
 use crate::block::Block;
@@ -29,7 +29,7 @@ impl Camera {
 
     pub fn build_view_matrix(&self) -> cgmath::Matrix4<f32> {
         Matrix4::look_to_rh(
-            self.pos,
+            point3(self.pos.x.rem_euclid(32.0),self.pos.y.rem_euclid(32.0),self.pos.z.rem_euclid(32.0)),
             vec3(
                 self.yaw.0.cos()*self.pitch.0.cos(),
                 self.pitch.0.sin(),
@@ -62,10 +62,10 @@ impl Camera {
             self.velocity.y += self.speed.min(0.1);
         }
         if inputs.keyboard[VirtualKeyCode::W as usize] {
-            self.speed/=1.01;
+            self.speed/=1.05;
         }
         if inputs.keyboard[VirtualKeyCode::X as usize] {
-            self.speed*=1.01;
+            self.speed*=1.05;
         }
         if inputs.mouse_button_states[0]{
             world.set_block(world.raycast(self.pos,vec3(

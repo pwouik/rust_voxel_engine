@@ -1,4 +1,4 @@
-use cgmath::{Point3, vec3, Vector3};
+use cgmath::{vec3, Vector3};
 
 const NORMS:[Vector3<i32>;6]=[
     vec3(-1,0,0),

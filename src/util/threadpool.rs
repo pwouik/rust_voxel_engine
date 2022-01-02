@@ -3,7 +3,6 @@ use std::sync::{mpsc, Arc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::{TryRecvError};
 use crossbeam_channel;
 
 pub struct ThreadPool<T:Send+'static,U:Send+'static>{
@@ -47,7 +46,7 @@ impl<T:Send+'static,U:Send+'static> ThreadPool<T,U>{
         self.sender.try_send(input)
     }
     pub fn pass(&mut self,output:U){
-        self.sender_thread.send(output);
+        self.sender_thread.send(output).unwrap();
     }
 }
 impl<T:Send+'static,U:Send+'static> Drop for ThreadPool<U,T> {

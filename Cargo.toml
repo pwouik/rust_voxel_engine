@@ -21,6 +21,7 @@ crossbeam-channel = "0.5.1"
 egui = "0.14"
 egui_wgpu_backend = "0.13"
 egui_winit_platform = "0.10.0"
+lz4_flex = "0.9"
 
 [features]
 default = ["profiling/profile-with-tracy"]

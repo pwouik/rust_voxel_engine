@@ -10,7 +10,7 @@ use crate::chunk_map::ChunkMap;
 use crate::region::Region;
 use crate::util::threadpool::ThreadPool;
 
-pub const RENDER_DIST:i32=50;
+pub const RENDER_DIST:i32=10;
 pub const RENDER_DIST_HEIGHT:i32=4;
 
 pub struct ChunkLoader{

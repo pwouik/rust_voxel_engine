@@ -5,7 +5,6 @@ pub struct Face{
     pub texture:u32,
     pub light:[u8;4],
 }
-
 pub struct Mesh{
     pub storage_buffer: wgpu::Buffer,
     pub bind_group: Option<wgpu::BindGroup>,

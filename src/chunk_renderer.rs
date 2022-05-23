@@ -501,7 +501,7 @@ impl ChunkRenderer {
             render_pass.set_bind_group(0, &context_bind_group, &[]);
             render_pass.set_bind_group(1, &self.face_bind_group, &[]);
             render_pass.set_bind_group(2, &self.diffuse_bind_group, &[]);
-            //render_pass.multi_draw_indirect_count(&self.indirect_buffer2, 0u64, &self.count_buffer, 0u64, (RENDER_DIST * RENDER_DIST * RENDER_DIST_HEIGHT) as u32);
+            render_pass.multi_draw_indirect_count(&self.indirect_buffer2, 0u64, &self.count_buffer, 0u64, (RENDER_DIST * RENDER_DIST * RENDER_DIST_HEIGHT) as u32);
         }
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

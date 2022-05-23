@@ -5,6 +5,7 @@ use crate::mipmap::*;
 use anyhow::*;
 use image::GenericImageView;
 
+pub const MIP_LEVEL_COUNT: u32 = 4;
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub struct Texture {

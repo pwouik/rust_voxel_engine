@@ -1,7 +1,7 @@
 use winit::{
     event::*,
 };
-use cgmath::{Rad, Point3, Matrix4, Vector3, vec3, point3};
+use cgmath::*;
 use crate::inputs::*;
 use cgmath::num_traits::clamp;
 use crate::block::Block;
@@ -27,7 +27,7 @@ impl Camera {
         }
     }
 
-    pub fn build_view_matrix(&self) -> cgmath::Matrix4<f32> {
+    pub fn build_view_matrix(&self) -> Matrix4<f32> {
         Matrix4::look_to_rh(
             point3(self.pos.x.rem_euclid(32.0),self.pos.y.rem_euclid(32.0),self.pos.z.rem_euclid(32.0)),
             vec3(

@@ -1,7 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32};
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
-pub const MIP_LEVEL_COUNT: u32 = 4;
 
 pub fn generate_mipmaps(
     encoder: &mut wgpu::CommandEncoder,
@@ -33,6 +32,7 @@ pub fn generate_mipmaps(
         },
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
+        multiview: None
     });
 
     let bind_group_layout = pipeline.get_bind_group_layout(0);

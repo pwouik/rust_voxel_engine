@@ -62,7 +62,6 @@ impl Region {
             }
             if min == u32::MAX_VALUE{break;}
             old_pos = min;
-            if min<pos{println!("{},{}",min,index);}
             if min!=pos {
                 self.index[index] = pos;
                 let mut buffer = vec![0; self.index[index + 1] as usize];
@@ -181,7 +180,6 @@ impl Region {
 }
 impl Drop for Region{
     fn drop(&mut self) {
-        self.save_index();
         self.shrink_to_fit();
         self.save_index();
     }

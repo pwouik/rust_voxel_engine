@@ -1,9 +1,14 @@
 1.
 frustrum culling
-occlusion culling
-draw optimization
+occlusion culling:
+low res rays
+octree
+parameters
 better thread management
 lz4 chunk compression
+point cloud lod
+switch to glam rs
+
 2.
 gpu noise
 physics

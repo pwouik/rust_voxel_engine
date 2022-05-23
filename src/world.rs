@@ -13,7 +13,6 @@ const TEXTURE_INDEX:[[u32;6];3]=[[0,0,0,0,2,1],[2,2,2,2,2,2],[3,3,3,3,3,3]];
 
 
 pub struct World{
-    pub mesh_map:HashMap<Point3<i32>,Mesh>,
     pub chunk_map:ChunkMap,
     chunk_updates:HashSet<Point3<i32>>,
     chunk_loader:ChunkLoader,
@@ -21,12 +20,10 @@ pub struct World{
 
 impl World{
     pub fn new()->World{
-        let mesh_map:HashMap<Point3<i32>,Mesh>=HashMap::new();
         let chunk_map=ChunkMap::new();
         let chunk_loader=ChunkLoader::new();
         let chunk_updates= HashSet::new();
         World{
-            mesh_map,
             chunk_map,
             chunk_loader,
             chunk_updates
@@ -52,24 +49,21 @@ impl World{
         }
     }
     #[profiling::function]
-    fn unload_chunks(&mut self, player_pos:Point3<i32>){
+    fn unload_chunks(&mut self, player_pos:Point3<i32>, renderer: &mut Renderer){
         let unloaded=self.chunk_map.hash_map.drain_filter(|pos, _| {
             let rel_pos= pos-player_pos;
             rel_pos.x <= -RENDER_DIST || rel_pos.x >= RENDER_DIST || rel_pos.y < -RENDER_DIST_HEIGHT || rel_pos.y > RENDER_DIST_HEIGHT || rel_pos.z <= -RENDER_DIST || rel_pos.z >= RENDER_DIST
         });
         for i in unloaded
         {
+            renderer.chunk_renderer.remove_chunk(i.0);
             self.chunk_loader.save(i);
         }
-        self.mesh_map.retain(|pos, _| {
-            let rel_pos= pos-player_pos;
-            rel_pos.x > -RENDER_DIST && rel_pos.x <RENDER_DIST && rel_pos.y >= -RENDER_DIST_HEIGHT && rel_pos.y <=RENDER_DIST_HEIGHT && rel_pos.z > -RENDER_DIST && rel_pos.z < RENDER_DIST
-        });
     }
     #[profiling::function]
-    pub fn tick(&mut self,camera:&Camera){
+    pub fn tick(&mut self,camera:&Camera,renderer:&mut Renderer){
         let player_pos= point3((camera.pos.x/32.0) as i32,(camera.pos.y/32.0) as i32,(camera.pos.z/32.0) as i32);
-        self.unload_chunks(player_pos);
+        self.unload_chunks(player_pos,renderer);
         self.chunk_loader.tick(&self.chunk_map,player_pos);
         self.add_chunks();
     }
@@ -78,15 +72,13 @@ impl World{
         let positions :Vec<Point3<i32>> = self.chunk_updates.drain().collect();
         for pos in positions{
             if self.chunk_map.get_chunk(pos).is_some(){
-                if let Some(mesh)=self.mesh_map.get(&pos){
-                    mesh.destroy();
-                }
-                self.mesh_map.insert(pos,self.create_mesh(pos,renderer));
+                renderer.chunk_renderer.remove_chunk(pos);
+                renderer.chunk_renderer.add_chunk(pos, &mut self.create_mesh(pos), &renderer.queue);
             }
         }
     }
     #[profiling::function]
-    fn add_face(&self,storage: &mut Vec<Face>, pos:Point3<i32>,chunk_pos:Point3<i32>, dir:Direction, texture:u32){
+    fn add_face(&self,storage: &mut [Vec<Face>; 6], pos:Point3<i32>,chunk_pos:Point3<i32>, dir:Direction, texture:u32){
         let global_pos= point3(chunk_pos.x<<5,chunk_pos.y<<5,chunk_pos.z<<5)+pos.to_vec();
         let ao_blocks=[
             self.chunk_map.get_block(global_pos+dir.transform(vec3(1,1,0))).is_full_block(),
@@ -103,16 +95,16 @@ impl World{
             255-(ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u8 *200,
             255-(ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u8 *200,
             255-(ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u8 *200];
-        storage.push(Face{ pos_dir: [pos.x as u8,pos.y as u8,pos.z as u8,dir.id as u8], texture, light})
+        storage[dir.id as usize].push(Face{ pos_dir: [pos.x as u8,pos.y as u8,pos.z as u8,dir.id as u8], texture, light})
     }
     #[profiling::function]
-    pub fn create_mesh(&self,pos:Point3<i32>,renderer:&Renderer)->Mesh{
+    pub fn create_mesh(&self, pos:Point3<i32>) -> [Vec<Face>; 6] {
         let chunk = self.chunk_map.get_chunk(pos).unwrap();
         let adjacent_chunks=[
             self.chunk_map.get_chunk(pos+vec3(1,0,0)),
             self.chunk_map.get_chunk(pos+vec3(0,0,1)),
             self.chunk_map.get_chunk(pos+vec3(0,1,0))];
-        let mut storage = Vec::new();
+        let mut storage:[Vec<Face>;6] = Default::default();;
         let mut index =0;
         for y in 0..32 {
             for z in 0..32 {
@@ -176,23 +168,7 @@ impl World{
                 }
             }
         }
-        let storage_buffer = renderer.create_face_buffer(&storage);
-        let mut bind_group=None;
-        if storage.len()!=0{
-            bind_group = Some(renderer.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &renderer.chunk_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: storage_buffer.as_entire_binding(),
-                }],
-                label: Some("uniform_bind_group"),
-            }));
-        }
-        Mesh{
-            storage_buffer,
-            bind_group,
-            num_elements: storage.len() as u32 * 6,
-        }
+        storage
     }
     #[profiling::function]
     pub fn set_block(&mut self,pos:Point3<i32>,value:Block){

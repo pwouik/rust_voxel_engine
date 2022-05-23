@@ -1,0 +1,39 @@
+#version 460
+layout (local_size_x = 1024) in;
+
+layout(set = 0, binding = 0) uniform Info{
+    ivec3 player_pos;
+    int height;
+    int width;
+};
+layout(set = 1,binding = 0) restrict buffer Count{uint count;};
+layout(set = 1,binding = 1) restrict readonly buffer State{uint visibility[];};//circular bounded
+struct Command{
+    uint vertex_count;
+    uint instance_count;
+    uint base_vertex;
+    uint base_instance;
+};
+layout(set = 0,binding = 2) restrict buffer CommandBuffer{Command command_buffer[];};
+layout(set = 0,binding = 3) restrict readonly buffer ChunkTable{uint table[];};//circular bounded
+
+void main() {
+    if(gl_GlobalInvocationID.x==0){
+        count=0;
+    }
+    barrier();
+    if(visibility[uint(gl_GlobalInvocationID.x )]==1){
+        uint id = atomicAdd(count,1);
+        int pos = int(gl_GlobalInvocationID.x);
+        int x = (pos - player_pos.x) % width - (width-1)/2 + 128;
+        pos /= width;
+        int y = (pos - player_pos.y) % height - (height-1)/2 + 128;
+        pos /= height;
+        int z = (pos - player_pos.z) % width  - (width-1)/2 + 128;
+        uint offset_pos = gl_GlobalInvocationID.x * 7 + gl_GlobalInvocationID.y;//location for a specific face;
+        command_buffer[id].vertex_count = table[offset_pos+1]-table[offset_pos];
+        command_buffer[id].instance_count = 1;
+        command_buffer[id].base_vertex = table[offset_pos];
+        command_buffer[id].base_instance = bitfieldInsert(bitfieldInsert(x,y,8,8),z,16,8);
+    }
+}

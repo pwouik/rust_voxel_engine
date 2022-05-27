@@ -1,4 +1,5 @@
 use std::{fs, iter};
+use std::borrow::Cow;
 use std::num::NonZeroU32;
 use cgmath::{EuclideanSpace, Point3, point3, vec3};
 use wgpu::util::DeviceExt;
@@ -81,6 +82,15 @@ impl ChunkRenderer {
         for i in 0..IMAGES.len() {
             textures_views.push(&textures[i].view);
         }
+
+        let vs_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("chunkv.spv")) };
+        let fs_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("chunkf.spv")) };
+        let occlusion_module  = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion.wgsl"))),
+        });
+        let cs_occlusion_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("occlusion_collect.spv")) };
+
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -145,6 +155,48 @@ impl ChunkRenderer {
             }],
             label: Some("occlusion_bind_group"),
         });
+        let occlusion_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[&context_bind_group_layout,&occlusion_bind_group_layout],
+                push_constant_ranges: &[]
+            });
+        let occlusion_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Occlusion Pipeline"),
+            layout: Some(&occlusion_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &occlusion_module,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &occlusion_module,
+                entry_point: "fs_main",
+                targets: &[],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None
+        });
         let count_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Count Buffer"),
@@ -155,7 +207,7 @@ impl ChunkRenderer {
         let indirect_buffer = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Indirect Buffer"),
-                size: (NB_CHUNKS * 4 * 4).into(),
+                size: (NB_CHUNKS * 6 * 4).into(),
                 usage: wgpu::BufferUsages::STORAGE|wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false
             }
@@ -163,7 +215,7 @@ impl ChunkRenderer {
         let indirect_buffer2 = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Indirect Buffer"),
-                size: (NB_CHUNKS * 4 * 4).into(),
+                size: (NB_CHUNKS * 6 * 4).into(),
                 usage: wgpu::BufferUsages::INDIRECT|wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false
             }
@@ -233,53 +285,6 @@ impl ChunkRenderer {
                 resource: chunk_table_buffer.as_entire_binding(),
             }],
             label: Some("occlusion_collect_bind_group"),
-        });
-        let vs_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("chunkv.spv")) };
-        let fs_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("chunkf.spv")) };
-        let vs_occlusion_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("occlusionv.spv")) };
-        let fs_occlusion_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("occlusionf.spv")) };
-        let cs_occlusion_module = unsafe { device.create_shader_module_spirv(&wgpu::include_spirv_raw!("occlusion_collect.spv")) };
-        let occlusion_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&context_bind_group_layout,&occlusion_bind_group_layout],
-                push_constant_ranges: &[]
-            });
-        let occlusion_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Occlusion Pipeline"),
-            layout: Some(&occlusion_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &vs_occlusion_module,
-                entry_point: "main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &fs_occlusion_module,
-                entry_point: "main",
-                targets: &[],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None
         });
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
@@ -501,7 +506,7 @@ impl ChunkRenderer {
             render_pass.set_bind_group(0, &context_bind_group, &[]);
             render_pass.set_bind_group(1, &self.face_bind_group, &[]);
             render_pass.set_bind_group(2, &self.diffuse_bind_group, &[]);
-            render_pass.multi_draw_indirect_count(&self.indirect_buffer2, 0u64, &self.count_buffer, 0u64, (RENDER_DIST * RENDER_DIST * RENDER_DIST_HEIGHT) as u32);
+            //render_pass.multi_draw_indirect_count(&self.indirect_buffer2, 0u64, &self.count_buffer, 0u64, NB_CHUNKS * 6 * 4);
         }
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -530,7 +535,7 @@ impl ChunkRenderer {
             occlusion_pass.dispatch(NB_CHUNKS, 6, 1)
 
         }
-        encoder.copy_buffer_to_buffer(&self.indirect_buffer,0u64,&self.indirect_buffer2,0u64, NB_CHUNKS as u64 * 4 * 4);
+        encoder.copy_buffer_to_buffer(&self.indirect_buffer,0u64,&self.indirect_buffer2,0u64, NB_CHUNKS as u64 * 6 * 4);
         queue.submit(iter::once(encoder.finish()));
     }
 }

@@ -32,12 +32,9 @@ impl Texture {
             format: DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         };
-        let texture=device.create_texture(&desc);
-        let view=texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Texture{
-            texture,
-            view,
-        }
+        let texture = device.create_texture(&desc);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Texture { texture, view }
     }
 
     pub fn from_bytes(
@@ -81,7 +78,7 @@ impl Texture {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
-                aspect: Default::default()
+                aspect: Default::default(),
             },
             rgba,
             wgpu::ImageDataLayout {
@@ -91,10 +88,52 @@ impl Texture {
             },
             size,
         );
-        let view=texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Ok(Texture{
-            texture,
-            view
-        })
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Ok(Texture { texture, view })
+    }
+    pub fn from_images(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        img: &[image::DynamicImage],
+        label: Option<&str>,
+    ) -> Result<Texture> {
+        let dimensions = img[0].dimensions();
+        let size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: img.len() as u32,
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label,
+            size,
+            mip_level_count: MIP_LEVEL_COUNT,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        });
+        let mut rgba = vec![];
+        for i in 0..img.len() {
+            rgba.append(&mut img[i].to_rgba8().into_raw());
+        }
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: Default::default(),
+            },
+            &rgba,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: NonZeroU32::new(4 * dimensions.0),
+                rows_per_image: NonZeroU32::new(dimensions.1),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Ok(Texture { texture, view })
     }
 }

@@ -1,33 +1,35 @@
 #![feature(hash_drain_filter)]
 
+use crate::camera::Camera;
+use crate::inputs::Inputs;
+use crate::renderer::Renderer;
+use crate::world::World;
+use profiling::tracy_client;
 use std::time::Instant;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder},
+    window::WindowBuilder,
 };
-use crate::camera::Camera;
-use crate::renderer::Renderer;
-use crate::inputs::Inputs;
-use crate::world::World;
 
-mod texture;
-mod renderer;
-mod camera;
-mod inputs;
-mod chunk;
-mod mesh;
 mod block;
-mod world;
+mod camera;
+mod chunk;
 mod chunk_loader;
-mod util;
-mod mipmap;
-mod region;
 mod chunk_map;
 mod chunk_renderer;
+mod inputs;
+mod mesh;
+mod mipmap;
+mod region;
+mod renderer;
+mod texture;
+mod util;
+mod world;
 
 fn main() {
     env_logger::init();
+    tracy_client::Client::start();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     use futures::executor::block_on;
@@ -35,28 +37,28 @@ fn main() {
     let mut renderer = block_on(Renderer::new(&window));
     let mut camera = Camera::new(0.1);
     let mut inputs = Inputs::new();
-    let mut world= World::new();
-    camera.update(&inputs,&mut world);
-    renderer.update(&camera);
-    let mut counter:i32=0;
-    let start_time=Instant::now();
+    let mut world = World::new();
+    camera.update(&inputs, &mut world);
+    let mut counter: i32 = 0;
+    let start_time = Instant::now();
     event_loop.run(move |event, _, control_flow| {
-        if !inputs.update(&event,&window) {
+        if !inputs.update(&event, &window) {
             match event {
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                }if window_id == window.id() => {
+                } if window_id == window.id() => {
                     match event {
                         WindowEvent::CloseRequested => {
                             *control_flow = ControlFlow::Exit;
-                        },
+                        }
                         WindowEvent::KeyboardInput { input, .. } => match input {
                             KeyboardInput {
                                 state: ElementState::Pressed,
                                 virtual_keycode: Some(VirtualKeyCode::Escape),
                                 ..
                             } => *control_flow = ControlFlow::Exit,
+
                             _ => {}
                         },
                         WindowEvent::Resized(physical_size) => {
@@ -70,21 +72,18 @@ fn main() {
                     }
                 }
                 Event::RedrawRequested(_) => {
-                    renderer.update(&camera);
-                    renderer.render(&world,&camera);
+                    renderer.render(&camera);
                 }
                 Event::MainEventsCleared => {
-                    // RedrawRequested will only trigger once, unless we manually
-                    // request it.
-                    camera.update(&inputs,&mut world);
+                    camera.update(&inputs, &mut world);
                     inputs.reset();
-                    counter+=1;
-                    world.update_display(&mut renderer);
-                    if counter%3==0{
-                        world.tick(&camera,&mut renderer);
+                    counter += 1;
+                    if counter % 3 == 0 {
+                        world.tick(&camera, &mut renderer);
                     }
+                    world.update_display(&mut renderer);
                     window.request_redraw();
-                    profiling::finish_frame!()
+                    profiling::finish_frame!();
                 }
                 _ => {}
             }

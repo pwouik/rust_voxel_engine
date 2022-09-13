@@ -1,97 +1,91 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use crate::texture::Texture;
+use std::borrow::Cow;
+use std::default::Default;
+use wgpu::ShaderModule;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-pub fn generate_mipmaps(
+/*pub fn generate_mipmaps(
     encoder: &mut wgpu::CommandEncoder,
     device: &wgpu::Device,
     texture: &wgpu::Texture,
+    levels: u32,
     mip_count: u32,
 ) {
-    let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("mipmap.wgsl"))),
     });
-
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("blit"),
-        layout: None,
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[TEXTURE_FORMAT.into()],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleStrip,
-            ..Default::default()
-        },
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None
+    let texture_bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::ReadOnly,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                    },
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Render Pipeline Layout"),
+        bind_group_layouts: &[&texture_bind_group_layout],
+        push_constant_ranges: &[wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::COMPUTE,
+            range: 0..4,
+        }],
     });
-
-    let bind_group_layout = pipeline.get_bind_group_layout(0);
-
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("mip"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Linear,
-        min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        ..Default::default()
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: None,
+        layout: Some(&pipeline_layout),
+        module: &shader,
+        entry_point: "main",
     });
-
-    let views = (0..mip_count)
-        .map(|mip| {
-            texture.create_view(&wgpu::TextureViewDescriptor {
-                label: Some("mip"),
-                format: None,
-                dimension: None,
-                aspect: wgpu::TextureAspect::All,
-                base_mip_level: mip,
-                mip_level_count: NonZeroU32::new(1),
-                base_array_layer: 0,
-                array_layer_count: None,
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for target_mip in 1..mip_count as usize {
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
+    for target_mip in 1u32..mip_count {
+        let view_in = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            base_mip_level: target_mip - 1,
+            ..wgpu::TextureViewDescriptor::default()
+        });
+        let view_out = texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            base_mip_level: target_mip,
+            ..wgpu::TextureViewDescriptor::default()
+        });
+        let texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&views[target_mip - 1]),
+                    resource: wgpu::BindingResource::TextureView(&view_in),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::TextureView(&view_out),
                 },
             ],
-            label: None,
+            label: Some("diffuse_bind_group"),
         });
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
-                view: &views[target_mip],
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                    store: true,
-                },
-            }],
-            depth_stencil_attachment: None,
-        });
-        rpass.set_pipeline(&pipeline);
-        rpass.set_bind_group(0, &bind_group, &[]);
-        rpass.draw(0..3, 0..1);
+        let mut compute_pass =
+            encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+        compute_pass.set_pipeline(&pipeline);
+        compute_pass.set_push_constants(0, &target_mip.to_ne_bytes());
+        compute_pass.set_bind_group(0, &texture_bind_group, &[]);
+        compute_pass.dispatch_workgroups(1, 1, levels);
     }
-}
+}*/

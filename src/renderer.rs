@@ -7,8 +7,8 @@ use cgmath::prelude::*;
 
 use crate::chunk_renderer::ChunkRenderer;
 use cgmath::*;
-use std::path;
 use std::time::Instant;
+use std::{iter, path};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -41,9 +41,8 @@ pub struct Renderer {
     zfar: f32,
     pub size: winit::dpi::PhysicalSize<u32>,
     projection: Matrix4<f32>,
-    old_pos:Point3<i32>,
-    old_viewproj: Matrix4<f32>,
-    viewproj: Matrix4<f32>,
+    old_pos: Point3<i32>,
+    view_matrix: Matrix4<f32>,
     viewproj_buffer: wgpu::Buffer,
     pos_buffer: wgpu::Buffer,
     context_bind_group: wgpu::BindGroup,
@@ -92,7 +91,7 @@ impl Renderer {
             format: surface.get_supported_formats(&adapter)[0],
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Immediate,
+            present_mode: wgpu::PresentMode::AutoVsync,
         };
         surface.configure(&device, &config);
 
@@ -107,12 +106,12 @@ impl Renderer {
                 zfar,
             );
 
-        let viewproj: Matrix4<f32> = Matrix4::identity();
+        let view_matrix: Matrix4<f32> = Matrix4::identity();
 
         let viewproj_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("viewproj Buffer"),
             contents: bytemuck::cast_slice(&[Uniform {
-                viewproj: viewproj.into(),
+                viewproj: Matrix4::identity().into(),
             }]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
@@ -190,9 +189,8 @@ impl Renderer {
             zfar,
             size,
             projection,
-            old_pos:point3(0,0,0),
-            old_viewproj: Matrix4::identity(),
-            viewproj,
+            old_pos: point3(0, 0, 0),
+            view_matrix,
             viewproj_buffer,
             pos_buffer,
             depth_texture,
@@ -208,14 +206,26 @@ impl Renderer {
                 usage: wgpu::BufferUsages::INDEX,
             })
     }
-    pub fn get_frustum_norms(&self) -> [Point3<f32>; 4] {
-        let angle = 45.0f32;
-        let up = point3(0.0, (angle).cos(), -(angle).sin());
-        let down = point3(0.0, -up.y, up.z);
+    pub fn get_frustum(&self, camera: &Camera) -> [Vector3<f32>; 5] {
+        //origin and norms
+        let angle = 45.0f32.to_radians();
+        let up = vec4(0.0, (angle).cos(), -(angle).sin(), 0.0);
+        let down = vec4(0.0, -up.y, up.z, 0.0);
         let aspect = self.config.width as f32 / self.config.height as f32;
-        let right = point3(up.y * aspect, 0.0, up.z);
-        let left = point3(-up.y * aspect, 0.0, up.z);
-        [down, up, left, right]
+        let right = vec4(up.y, 0.0, up.z * aspect, 0.0);
+        let left = vec4(-up.y, 0.0, up.z * aspect, 0.0);
+        let inv_rot_matrix = self.view_matrix.transpose();
+        [
+            vec3(
+                camera.pos.x.rem_euclid(32.0),
+                camera.pos.y.rem_euclid(32.0),
+                camera.pos.z.rem_euclid(32.0),
+            ) / 32.0,
+            (inv_rot_matrix * down).truncate(),
+            (inv_rot_matrix * up).truncate(),
+            (inv_rot_matrix * left).truncate(),
+            (inv_rot_matrix * right).truncate(),
+        ]
     }
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
@@ -235,21 +245,16 @@ impl Renderer {
 
     #[profiling::function]
     pub fn render(&mut self, camera: &Camera) {
-        self.viewproj = self.projection * camera.build_view_matrix();
-        self.queue.write_buffer(
-            &self.viewproj_buffer,
-            0,
-            bytemuck::cast_slice(&[Uniform {
-                viewproj: self.viewproj.into(),
-            }]),
-        );
-
         let player_pos = point3(
             (camera.pos.x / 32.0).floor() as i32,
             (camera.pos.y / 32.0).floor() as i32,
             (camera.pos.z / 32.0).floor() as i32,
         );
-        self.queue.write_buffer(&self.pos_buffer, 0, bytemuck::cast_slice(&[player_pos.x,player_pos.y,player_pos.z]));
+        self.queue.write_buffer(
+            &self.pos_buffer,
+            0,
+            bytemuck::cast_slice(&[player_pos.x, player_pos.y, player_pos.z]),
+        );
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
@@ -264,16 +269,35 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        self.chunk_renderer.render_chunks(
-            &self.device,
-            &self.queue,
-            &view,
-            &self.depth_texture,
-            self.old_pos,
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Chunk Render Encoder"),
+            });
+
+        self.chunk_renderer.culling(
+            self.get_frustum(&camera),
             player_pos,
-            self.get_frustum_norms(),
+            &self.queue,
+            &mut encoder,
+            &self.depth_texture,
             &self.context_bind_group,
         );
+        self.view_matrix = camera.build_view_matrix();
+        self.queue.write_buffer(
+            &self.viewproj_buffer,
+            0,
+            bytemuck::cast_slice(&[Uniform {
+                viewproj: (self.projection * self.view_matrix).into(),
+            }]),
+        );
+        self.chunk_renderer.render_chunks(
+            &mut encoder,
+            &view,
+            &self.depth_texture,
+            &self.context_bind_group,
+        );
+        self.queue.submit(iter::once(encoder.finish()));
         frame.present();
         self.old_pos = player_pos;
     }

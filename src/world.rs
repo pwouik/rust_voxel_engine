@@ -10,6 +10,7 @@ use cgmath::{point3, vec3, Point3, Vector3};
 use std::collections::HashSet;
 
 const TEXTURE_INDEX: [[u32; 6]; 3] = [[0, 0, 0, 0, 2, 1], [2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3]];
+const FACES_LIGHT: [f32; 6] = [0.4, 0.4, 0.7, 0.7, 0.1, 1.0];
 
 pub struct World {
     pub chunk_map: ChunkMap,
@@ -86,7 +87,6 @@ impl World {
             }
         }
     }
-    #[profiling::function]
     fn add_face(
         &self,
         storage: &mut [Vec<Face>; 6],
@@ -124,10 +124,14 @@ impl World {
                 .is_full_block(),
         ];
         let light: [u8; 4] = [
-            255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u8 * 200,
-            255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u8 * 200,
-            255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u8 * 200,
-            255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u8 * 200,
+            ((255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u32 * 200) as f32
+                * FACES_LIGHT[dir.id as usize]) as u8,
+            ((255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u32 * 200) as f32
+                * FACES_LIGHT[dir.id as usize]) as u8,
+            ((255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u32 * 200) as f32
+                * FACES_LIGHT[dir.id as usize]) as u8,
+            ((255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u32 * 200) as f32
+                * FACES_LIGHT[dir.id as usize]) as u8,
         ];
         storage[dir.id as usize].push(Face {
             pos_dir: [pos.x as u8, pos.y as u8, pos.z as u8, dir.id as u8],

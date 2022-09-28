@@ -44,15 +44,11 @@ fn imod(a:i32,b:i32)->i32{
 
 @compute @workgroup_size(128,6,1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if(i32(global_id.x) >= context.width*context.height*context.width)
-    {
-        //return;
-    }
     if(global_id.x==0u && global_id.y==0u){
         count.c=0u;
     }
     storageBarrier();
-    if(i32(global_id.x) < context.width*context.height*context.width && visibility.mask[global_id.x*6u + global_id.y]==1u){
+    if(i32(global_id.x) < context.width*context.height*context.width && visibility.mask[global_id.x*6u + global_id.y]==1u){//
         let id = atomicAdd(&count.c,1u);
         var pos = i32(global_id.x);
         let x = imod(pos - context.player_pos.x + (context.width - 1)/2, context.width) - (context.width - 1)/2 + 128;

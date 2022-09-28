@@ -50,6 +50,9 @@ impl Camera {
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
             self.velocity += vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed;
         }
+        if inputs.keyboard[VirtualKeyCode::A as usize] {
+            self.velocity += vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed * 5.0;
+        }
         if inputs.keyboard[VirtualKeyCode::S as usize] {
             self.velocity += -vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed;
         }

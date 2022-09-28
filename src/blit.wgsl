@@ -1,10 +1,10 @@
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] tex_coords: vec2<f32>;
+    @builtin(position) position: vec4<f32>,
+    @location(0) tex_coords: vec2<f32>,
 };
 
-[[stage(vertex)]]
-fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var vertex_out: VertexOutput;
     let x = i32(vertex_index) / 2;
     let y = i32(vertex_index) & 1;
@@ -21,12 +21,12 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> VertexOutput {
     return vertex_out;
 }
 
-[[group(0), binding(0)]]
-var r_color: texture_2d<f32>;
-[[group(0), binding(1)]]
+@group(0) @binding(0)
+var r_color: texture_2d_array<f32>;
+@group(0) @binding(1)
 var r_sampler: sampler;
 
-[[stage(fragment)]]
-fn fs_main(vertex_in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    return textureSample(r_color, r_sampler, vertex_in.tex_coords);
+@fragment
+fn fs_main(vertex_in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(r_color, r_sampler, vertex_in.tex_coords,0);
 }

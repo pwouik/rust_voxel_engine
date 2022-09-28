@@ -4,10 +4,10 @@ use crate::chunk_loader::{
 use crate::mesh::Face;
 use crate::mipmap;
 use crate::texture::*;
-use cgmath::{point3, vec3, EuclideanSpace, Point3};
+use cgmath::{point3, vec3, EuclideanSpace, InnerSpace, Point3, Vector3, Vector4};
 use std::borrow::Cow;
-use std::num::NonZeroU32;
-use std::{fs, iter};
+use std::io::Write;
+use std::{fs, io, iter};
 use wgpu::util::DeviceExt;
 pub const IMAGES: [&str; 4] = [
     "textures/grass_side.png",
@@ -82,13 +82,13 @@ impl ChunkRenderer {
         }
         let texture_array =
             Texture::from_images(device, queue, &images, Some("texture_array")).unwrap();
-        /*mipmap::generate_mipmaps(
+        mipmap::generate_mipmaps(
             init_encoder,
             &device,
             &texture_array.texture,
             IMAGES.len() as u32,
             MIP_LEVEL_COUNT,
-        );*/
+        );
         let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -469,16 +469,13 @@ impl ChunkRenderer {
         };
         //queue.write_buffer(&self.chunk_table_buffer,id.into(),&vec![0u32;7]);
     }
-
-    pub fn render_chunks(
+    pub fn culling(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        view: &wgpu::TextureView,
-        depth_texture: &Texture,
-        old_pos: Point3<i32>,
+        frustum: [Vector3<f32>; 5],
         player_pos: Point3<i32>,
-        norms: [Point3<f32>; 4],
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
     ) {
         self.rendered_chunks.clear();
@@ -493,17 +490,17 @@ impl ChunkRenderer {
             let pos = point3(x, y, z);
             let fpos = vec3(x as f32, y as f32, z as f32);
             let mut culled = false;
-            for j in 0..4 {
-                if norms[j].dot(fpos) < 0.0
-                    && norms[j].dot(fpos + vec3(0., 0., 1.)) < 0.0
-                    && norms[j].dot(fpos + vec3(0., 1., 0.)) < 0.0
-                    && norms[j].dot(fpos + vec3(0., 1., 1.)) < 0.0
-                    && norms[j].dot(fpos + vec3(1., 0., 0.)) < 0.0
-                    && norms[j].dot(fpos + vec3(1., 0., 1.)) < 0.0
-                    && norms[j].dot(fpos + vec3(1., 1., 0.)) < 0.0
-                    && norms[j].dot(fpos + vec3(1., 1., 1.)) < 0.0
+            for j in 1..5 {
+                if frustum[j].dot(fpos - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(0., 0., 1.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(0., 1., 0.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(0., 1., 1.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(1., 0., 0.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(1., 0., 1.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(1., 1., 0.) - frustum[0]) < 0.0
+                    && frustum[j].dot(fpos + vec3(1., 1., 1.) - frustum[0]) < 0.0
                 {
-                    culled = false;
+                    culled = true;
                     break;
                 }
             }
@@ -520,9 +517,42 @@ impl ChunkRenderer {
             0u64,
             bytemuck::cast_slice(&self.rendered_chunks),
         );
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Chunk Render Encoder"),
-        });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Occlusion Pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: false,
+                    }),
+                    stencil_ops: None,
+                }),
+            });
+            render_pass.set_pipeline(&self.occlusion_pipeline);
+            render_pass.set_bind_group(0, &context_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.occlusion_bind_group, &[]);
+            render_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1)
+        }
+        {
+            let mut occlusion_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Occlusion Pass"),
+            });
+            occlusion_pass.set_pipeline(&self.compute_pipeline);
+            occlusion_pass.set_bind_group(0, &context_bind_group, &[]);
+            occlusion_pass.set_bind_group(1, &self.occlusion_collect_bind_group, &[]);
+            occlusion_pass.dispatch_workgroups((NB_CHUNKS / 128) + 1, 1, 1);
+        }
+        encoder.clear_buffer(&self.visibility_buffer, 0u64, None);
+    }
+    pub fn render_chunks(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        depth_texture: &Texture,
+        context_bind_group: &wgpu::BindGroup,
+    ) {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Chunk Render Pass"),
@@ -561,38 +591,9 @@ impl ChunkRenderer {
             );
             //render_pass.multi_draw_indirect(&self.indirect_buffer, 0u64, NB_CHUNKS*6);
         }
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Occlusion Pass"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: false,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-            render_pass.set_pipeline(&self.occlusion_pipeline);
-            render_pass.set_bind_group(0, &context_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.occlusion_bind_group, &[]);
-            render_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1)
-        }
-        {
-            let mut occlusion_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Occlusion Pass"),
-            });
-            occlusion_pass.set_pipeline(&self.compute_pipeline);
-            occlusion_pass.set_bind_group(0, &context_bind_group, &[]);
-            occlusion_pass.set_bind_group(1, &self.occlusion_collect_bind_group, &[]);
-            occlusion_pass.dispatch_workgroups((NB_CHUNKS / 128) + 1, 1, 1);
-        }
-        encoder.clear_buffer(&self.visibility_buffer, 0u64, None);
-        queue.submit(iter::once(encoder.finish()));
     }
 }
-impl Drop for ChunkRenderer{
+impl Drop for ChunkRenderer {
     fn drop(&mut self) {
         println!("drop chunkrenderer");
     }

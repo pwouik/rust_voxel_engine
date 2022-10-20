@@ -11,6 +11,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+use renderdoc::{RenderDoc, V110};
 
 mod block;
 mod camera;
@@ -28,6 +29,11 @@ mod util;
 mod world;
 
 fn main() {
+    let mut rd: RenderDoc<V110> = RenderDoc::new().unwrap();
+    rd.set_capture_keys(&[renderdoc::InputButton::C]);
+    rd.set_capture_option_u32(renderdoc::CaptureOption::AllowVSync, 1);
+    rd.set_capture_option_u32(renderdoc::CaptureOption::ApiValidation, 1);
+
     env_logger::init();
     tracy_client::Client::start();
     let event_loop = EventLoop::new();

@@ -30,7 +30,7 @@ var<uniform> context: Context;
 var<storage, read_write> count: Counter;
 
 @group(1) @binding(1)
-var<storage, read> visibility:Block1;//circular bounded
+var<storage, read_write> visibility:Block1;//circular bounded
 
 @group(1) @binding(2)
 var<storage, read_write> commands:Block2;
@@ -62,4 +62,5 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         commands.data[id].base_vertex = chunk_table.data[offset_pos]*6u;
         commands.data[id].base_instance = insertBits(insertBits(u32(x),u32(y),8u,8u),u32(z),16u,8u);
     }
+    visibility.mask[global_id.x*6u + global_id.y] = 0u;
 }

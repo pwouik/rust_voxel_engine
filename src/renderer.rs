@@ -1,14 +1,11 @@
 use crate::camera::Camera;
 use crate::chunk_loader::{RENDER_DIST, RENDER_DIST2, RENDER_DIST_HEIGHT, RENDER_DIST_HEIGHT2};
-use crate::mesh::*;
 use crate::texture::Texture;
-use crate::world::World;
 use cgmath::prelude::*;
 
 use crate::chunk_renderer::ChunkRenderer;
 use cgmath::*;
-use std::time::Instant;
-use std::{iter, path};
+use std::iter;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -19,12 +16,7 @@ pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
     0.0, 0.0, 0.5, 0.0,
     0.0, 0.0, 0.5, 1.0,
 );
-struct Context {
-    surface: wgpu::Surface,
-    config: wgpu::SurfaceConfiguration,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
-}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniform {
@@ -41,12 +33,12 @@ pub struct Renderer {
     zfar: f32,
     pub size: winit::dpi::PhysicalSize<u32>,
     projection: Matrix4<f32>,
-    old_pos: Point3<i32>,
     view_matrix: Matrix4<f32>,
     viewproj_buffer: wgpu::Buffer,
     pos_buffer: wgpu::Buffer,
     context_bind_group: wgpu::BindGroup,
     depth_texture: Texture,
+    depth_bind_group: wgpu::BindGroup,
     pub chunk_renderer: ChunkRenderer,
 }
 
@@ -91,7 +83,8 @@ impl Renderer {
             format: surface.get_supported_formats(&adapter)[0],
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Immediate,
+            //alpha_mode: wgpu::CompositeAlphaMode::Auto
         };
         surface.configure(&device, &config);
 
@@ -171,12 +164,57 @@ impl Renderer {
             label: Some("uniform_bind_group"),
         });
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+
+        let depth_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let depth_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture{
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Depth,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("depth_bind_group_layout"),
+            });
+        let depth_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &depth_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&depth_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&depth_sampler),
+                },
+            ],
+            label: Some("depth_bind_group"),
+        });
+
+
         let chunk_renderer = ChunkRenderer::new(
             &device,
             &mut init_encoder,
             &queue,
             &config,
             &context_bind_group_layout,
+            &depth_bind_group_layout,
         );
         queue.submit(Some(init_encoder.finish()));
         Self {
@@ -189,11 +227,11 @@ impl Renderer {
             zfar,
             size,
             projection,
-            old_pos: point3(0, 0, 0),
             view_matrix,
             viewproj_buffer,
             pos_buffer,
             depth_texture,
+            depth_bind_group,
             chunk_renderer,
             context_bind_group,
         }
@@ -280,8 +318,10 @@ impl Renderer {
             player_pos,
             &self.queue,
             &mut encoder,
+            &view,
             &self.depth_texture,
             &self.context_bind_group,
+            &self.depth_bind_group,
         );
         self.view_matrix = camera.build_view_matrix();
         self.queue.write_buffer(
@@ -299,6 +339,6 @@ impl Renderer {
         );
         self.queue.submit(iter::once(encoder.finish()));
         frame.present();
-        self.old_pos = player_pos;
+        self.chunk_renderer.map_count();
     }
 }

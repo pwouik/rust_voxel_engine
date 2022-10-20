@@ -19,7 +19,7 @@ impl Chunk {
     }
     #[profiling::function]
     pub fn generate(&mut self, pos: Point3<i32>) {
-        let ssn = SuperSimplex::new();
+        let ssn = SuperSimplex::new(0);
         for x in 0i32..32 {
             for z in 0i32..32 {
                 for y in 0i32..32 {

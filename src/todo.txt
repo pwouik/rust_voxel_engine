@@ -1,5 +1,4 @@
 1.
-frustrum culling
 occlusion culling:
 low res rays
 octree

@@ -1,6 +1,7 @@
 struct Output{
-    @builtin(position) vertex_pos: vec4<f32>,
+    @builtin(position) frame_pos: vec4<f32>,
     @location(0) @interpolate(flat) chunk_pos: vec3<i32>,
+    @location(1) vertex_pos: vec4<f32>,
 };
 struct Block{
     viewproj :mat4x4<f32>,
@@ -49,6 +50,8 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32)-> Output{
                                f32(ret.chunk_pos.y + i32(extractBits(0xF0CCCCu,face_vertex_id,1u))),
                                f32(ret.chunk_pos.z + i32(extractBits(0x69F096u,face_vertex_id,1u))), 1.0) * vec4<f32>(32.0,32.0,32.0,1.0));
     if(ret.chunk_pos.x == 0 && ret.chunk_pos.y == 0 && ret.chunk_pos.z == 0){ret.vertex_pos = vec4<f32>(f32(face_vertex_id/2u)*0.1,f32(face_vertex_id%2u)*0.1,0.1,1.0);}
+    ret.frame_pos = ret.vertex_pos;
+
     return ret;
 };
 
@@ -70,26 +73,38 @@ fn imod(a:i32,b:i32)->i32{
     return (a%b+b)%b;
 }
 
+@group(2) @binding(0)
+var depth:texture_depth_2d;
+@group(2) @binding(1)
+var depth_sampler:sampler;
+
 @fragment
-fn fs_main(pos_in: Output){
-    var pos:vec3<i32> = context.player_pos + pos_in.chunk_pos;
-    let id:u32 = (u32(imod(pos.x, context.width)) + u32(context.width*imod(pos.y, context.height)) + u32(context.width*context.height*imod(pos.z, context.width)))*6u;
-    if(pos_in.chunk_pos.x>=0){
-        visibility.buf[id]=1u;
+fn fs_main(pos_in: Output)-> @location(0) vec4<f32>{
+    let frame_pos = pos_in.vertex_pos / pos_in.vertex_pos.w;
+    let d = textureSample(depth,depth_sampler,frame_pos.xy*0.5 + 0.5);
+    var c=0.5f;
+    if(d < pos_in.frame_pos.z || true){
+        c=d;
+        var pos:vec3<i32> = context.player_pos + pos_in.chunk_pos;
+        let id:u32 = (u32(imod(pos.x, context.width)) + u32(context.width*imod(pos.y, context.height)) + u32(context.width*context.height*imod(pos.z, context.width)))*6u;
+        if(pos_in.chunk_pos.x>=0){
+            visibility.buf[id]=1u;
+        }
+        if(pos_in.chunk_pos.x<=0){
+            visibility.buf[id+1u]=1u;
+        }
+        if(pos_in.chunk_pos.z>=0 ){
+            visibility.buf[id+2u]=1u;
+        }
+        if(pos_in.chunk_pos.z<=0){
+            visibility.buf[id+3u]=1u;
+        }
+        if(pos_in.chunk_pos.y>=0){
+            visibility.buf[id+4u]=1u;
+        }
+        if(pos_in.chunk_pos.y<=0){
+            visibility.buf[id+5u]=1u;
+        }
     }
-    if(pos_in.chunk_pos.x<=0){
-        visibility.buf[id+1u]=1u;
-    }
-    if(pos_in.chunk_pos.z>=0 ){
-        visibility.buf[id+2u]=1u;
-    }
-    if(pos_in.chunk_pos.z<=0){
-        visibility.buf[id+3u]=1u;
-    }
-    if(pos_in.chunk_pos.y>=0){
-        visibility.buf[id+4u]=1u;
-    }
-    if(pos_in.chunk_pos.y<=0){
-        visibility.buf[id+5u]=1u;
-    }
+    return vec4<f32>(c,c,c,1.0);
 }

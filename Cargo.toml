@@ -7,7 +7,7 @@ resolver="2"
 
 [dependencies]
 profiling = "1.0"
-noise = "0.7"
+noise = "0.8"
 anyhow = "1.0"
 image = "0.24"
 winit = "0.27"
@@ -16,6 +16,7 @@ env_logger = "0.9"
 log = "0.4"
 wgpu = "0.13"
 futures = "0.3"
+renderdoc = "0.10"
 bytemuck = { version = "1.9", features = [ "derive" ] }
 crossbeam-channel = "0.5"
 lz4_flex = "0.9"

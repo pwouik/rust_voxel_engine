@@ -4,10 +4,12 @@ use crate::chunk_loader::{
 use crate::mesh::Face;
 use crate::mipmap;
 use crate::texture::*;
-use cgmath::{point3, vec3, EuclideanSpace, InnerSpace, Point3, Vector3, Vector4};
+use cgmath::{point3, vec3, InnerSpace, Point3, Vector3};
 use std::borrow::Cow;
-use std::io::Write;
-use std::{fs, io, iter};
+use std::convert::TryInto;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
+use wgpu::BufferSize;
 use wgpu::util::DeviceExt;
 pub const IMAGES: [&str; 4] = [
     "textures/grass_side.png",
@@ -21,6 +23,9 @@ pub struct ChunkRenderer {
     rendered_chunks: Vec<u32>,
     box_buffer: wgpu::Buffer,
     count_buffer: wgpu::Buffer,
+    staging_count_buffer: wgpu::Buffer,
+    count_map_flag:Arc<AtomicU8>,
+    count:u32,
     visibility_buffer: wgpu::Buffer,
     indirect_buffer: wgpu::Buffer,
     chunk_table_buffer: wgpu::Buffer,
@@ -41,6 +46,7 @@ impl ChunkRenderer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         context_bind_group_layout: &wgpu::BindGroupLayout,
+        depth_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -171,7 +177,7 @@ impl ChunkRenderer {
         let occlusion_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&context_bind_group_layout, &occlusion_bind_group_layout],
+                bind_group_layouts: &[&context_bind_group_layout, &occlusion_bind_group_layout, depth_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let occlusion_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -185,7 +191,14 @@ impl ChunkRenderer {
             fragment: Some(wgpu::FragmentState {
                 module: &occlusion_module,
                 entry_point: "fs_main",
-                targets: &[],
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format.into(),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -196,13 +209,7 @@ impl ChunkRenderer {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
+            depth_stencil: None,
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -213,8 +220,15 @@ impl ChunkRenderer {
         let count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Count Buffer"),
             contents: bytemuck::cast_slice(&[0 as u32]),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_SRC,
         });
+        let staging_count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Count Buffer"),
+            contents: bytemuck::cast_slice(&[0 as u32]),
+            usage: wgpu::BufferUsages::COPY_DST|wgpu::BufferUsages::MAP_READ,
+        });
+        let count_map_flag=Arc::new(AtomicU8::new(0));
+        let count=0u32;
         let indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Indirect Buffer"),
             size: (NB_CHUNKS * 6 * 4 * 4).into(),
@@ -246,7 +260,7 @@ impl ChunkRenderer {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
                         ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -402,6 +416,9 @@ impl ChunkRenderer {
             rendered_chunks: vec![],
             box_buffer,
             count_buffer,
+            staging_count_buffer,
+            count_map_flag,
+            count,
             visibility_buffer,
             indirect_buffer,
             chunk_table_buffer,
@@ -475,8 +492,10 @@ impl ChunkRenderer {
         player_pos: Point3<i32>,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
         depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
+        depth_bind_group: &wgpu::BindGroup,
     ) {
         self.rendered_chunks.clear();
         for i in 0..self.index.len() {
@@ -520,19 +539,25 @@ impl ChunkRenderer {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Occlusion Pass"),
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: false,
-                    }),
-                    stencil_ops: None,
-                }),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
             });
             render_pass.set_pipeline(&self.occlusion_pipeline);
             render_pass.set_bind_group(0, &context_bind_group, &[]);
             render_pass.set_bind_group(1, &self.occlusion_bind_group, &[]);
+            render_pass.set_bind_group(2, depth_bind_group, &[]);
             render_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1)
         }
         {
@@ -545,6 +570,17 @@ impl ChunkRenderer {
             occlusion_pass.dispatch_workgroups((NB_CHUNKS / 128) + 1, 1, 1);
         }
         encoder.clear_buffer(&self.visibility_buffer, 0u64, None);
+        if self.count_map_flag.load(Ordering::Relaxed)==0{
+            if self.count>0{
+                let buffer_slice = self.staging_count_buffer.slice(..);
+                self.count = u32::from_ne_bytes(bytemuck::cast_slice(&buffer_slice.get_mapped_range()).try_into().unwrap());
+                self.staging_count_buffer.unmap();
+                println!("{}",self.count);
+            }
+            self.count=self.count.max(1);
+            encoder.copy_buffer_to_buffer(&self.count_buffer, 0, &self.staging_count_buffer, 0, 4);
+            self.count_map_flag.store(1u8,Ordering::Relaxed);
+        }
     }
     pub fn render_chunks(
         &mut self,
@@ -572,7 +608,7 @@ impl ChunkRenderer {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: wgpu::LoadOp::Clear(0.5),
                         store: true,
                     }),
                     stencil_ops: None,
@@ -587,9 +623,17 @@ impl ChunkRenderer {
                 0u64,
                 &self.count_buffer,
                 0u64,
-                NB_CHUNKS * 6,
+                self.count*2,
             );
             //render_pass.multi_draw_indirect(&self.indirect_buffer, 0u64, NB_CHUNKS*6);
+        }
+    }
+    pub fn map_count(&mut self){
+        if self.count_map_flag.load(Ordering::Relaxed)==1{
+            self.count_map_flag.store(2u8,Ordering::Relaxed);
+            let buffer_slice = self.staging_count_buffer.slice(..);
+            let atomic=self.count_map_flag.clone();
+            buffer_slice.map_async(wgpu::MapMode::Read, move |_| atomic.store(0u8,Ordering::Relaxed));
         }
     }
 }

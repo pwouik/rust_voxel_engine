@@ -47,8 +47,8 @@ impl Renderer {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::default();
+        let surface = unsafe { instance.create_surface(window) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -78,13 +78,15 @@ impl Renderer {
             .unwrap();
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let capabilities = surface.get_capabilities(&adapter);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Immediate,
-            //alpha_mode: wgpu::CompositeAlphaMode::Auto
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![wgpu::TextureFormat::Bgra8UnormSrgb],
         };
         surface.configure(&device, &config);
 
@@ -166,8 +168,6 @@ impl Renderer {
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let depth_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
         let depth_bind_group_layout =
@@ -176,17 +176,17 @@ impl Renderer {
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture{
+                        ty: wgpu::BindingType::Texture {
                             multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
                             view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Depth,
                         },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                         count: None,
                     },
                 ],
@@ -336,6 +336,18 @@ impl Renderer {
             &view,
             &self.depth_texture,
             &self.context_bind_group,
+            &self.depth_bind_group
+        );
+
+        self.chunk_renderer.culling(
+            self.get_frustum(&camera),
+            player_pos,
+            &self.queue,
+            &mut encoder,
+            &view,
+            &self.depth_texture,
+            &self.context_bind_group,
+            &self.depth_bind_group,
         );
         self.queue.submit(iter::once(encoder.finish()));
         frame.present();

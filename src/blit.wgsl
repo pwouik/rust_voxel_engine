@@ -22,11 +22,11 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 }
 
 @group(0) @binding(0)
-var r_color: texture_2d_array<f32>;
+var r_color: texture_2d<f32>;
 @group(0) @binding(1)
 var r_sampler: sampler;
 
 @fragment
 fn fs_main(vertex_in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(r_color, r_sampler, vertex_in.tex_coords,0);
+    return textureSample(r_color, r_sampler, vertex_in.tex_coords);
 }

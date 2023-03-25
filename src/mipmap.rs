@@ -19,9 +19,6 @@ pub fn generate_mipmaps(
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Nearest,
-        compare: None,
-        lod_min_clamp: -100.0,
-        lod_max_clamp: 100.0,
         ..Default::default()
     });
     let texture_bind_group_layout =
@@ -32,7 +29,7 @@ pub fn generate_mipmaps(
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     },
                     count: None,
@@ -84,12 +81,12 @@ pub fn generate_mipmaps(
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     label: Some("mip"),
                     format: None,
-                    dimension: None,
+                    dimension: Some(wgpu::TextureViewDimension::D2),
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
-                    mip_level_count: NonZeroU32::new(1),
+                    mip_level_count: Some(1),
                     base_array_layer: level,
-                    array_layer_count: NonZeroU32::new(1),
+                    array_layer_count: Some(1),
                 })
             })
             .collect::<Vec<_>>();

@@ -36,6 +36,7 @@ pub struct ChunkRenderer {
     occlusion_collect_bind_group: wgpu::BindGroup,
     texture_array: Texture,
     occlusion_pipeline: wgpu::RenderPipeline,
+    dummy_pipeline: wgpu::RenderPipeline,
     compute_pipeline: wgpu::ComputePipeline,
     render_pipeline: wgpu::RenderPipeline,
 }
@@ -77,9 +78,6 @@ impl ChunkRenderer {
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Linear,
-            compare: None,
-            lod_min_clamp: -100.0,
-            lod_max_clamp: 100.0,
             ..Default::default()
         });
         let mut images = vec![];
@@ -117,6 +115,10 @@ impl ChunkRenderer {
         let occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion.wgsl"))),
+        });
+        let dummy_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("dummy.wgsl"))),
         });
         let cs_occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -217,6 +219,57 @@ impl ChunkRenderer {
             },
             multiview: None,
         });
+
+        let dummy_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("dummy Pipeline Layout"),
+                bind_group_layouts: &[&context_bind_group_layout, depth_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let dummy_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("dummy Pipeline"),
+            layout: Some(&dummy_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &dummy_module,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &dummy_module,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format.into(),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
         let count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Count Buffer"),
             contents: bytemuck::cast_slice(&[0 as u32]),
@@ -431,6 +484,7 @@ impl ChunkRenderer {
             render_pipeline,
             compute_pipeline,
             occlusion_pipeline,
+            dummy_pipeline,
         }
     }
 
@@ -555,7 +609,7 @@ impl ChunkRenderer {
                 depth_stencil_attachment: None,
             });
             render_pass.set_pipeline(&self.occlusion_pipeline);
-            render_pass.set_bind_group(0, &context_bind_group, &[]);
+            render_pass.set_bind_group(0, context_bind_group, &[]);
             render_pass.set_bind_group(1, &self.occlusion_bind_group, &[]);
             render_pass.set_bind_group(2, depth_bind_group, &[]);
             render_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1)
@@ -588,6 +642,7 @@ impl ChunkRenderer {
         view: &wgpu::TextureView,
         depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
+        depth_bind_group: &wgpu::BindGroup,
     ) {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -608,7 +663,7 @@ impl ChunkRenderer {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0.5),
+                        load: wgpu::LoadOp::Clear(1.0),
                         store: true,
                     }),
                     stencil_ops: None,
@@ -626,6 +681,28 @@ impl ChunkRenderer {
                 self.count*2,
             );
             //render_pass.multi_draw_indirect(&self.indirect_buffer, 0u64, NB_CHUNKS*6);
+        }
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Dummy Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: false,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_texture.view,
+                    depth_ops: None,
+                    stencil_ops: None,
+                }),
+            });
+            render_pass.set_pipeline(&self.dummy_pipeline);
+            render_pass.set_bind_group(0, context_bind_group, &[]);
+            render_pass.set_bind_group(1, depth_bind_group, &[]);
+            render_pass.draw(0..3, 0..1)
         }
     }
     pub fn map_count(&mut self){

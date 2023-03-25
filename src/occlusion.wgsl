@@ -74,17 +74,16 @@ fn imod(a:i32,b:i32)->i32{
 }
 
 @group(2) @binding(0)
-var depth:texture_depth_2d;
+var depth:texture_2d<f32>;
 @group(2) @binding(1)
 var depth_sampler:sampler;
 
 @fragment
 fn fs_main(pos_in: Output)-> @location(0) vec4<f32>{
-    let frame_pos = pos_in.vertex_pos / pos_in.vertex_pos.w;
-    let d = textureSample(depth,depth_sampler,frame_pos.xy*0.5 + 0.5);
+    let tex_pos = pos_in.vertex_pos / pos_in.vertex_pos.w;
+    //let d = textureSampleCompare(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r;//textureSampleCompare(depth,depth_sampler,tex_pos.xy*0.5 + 0.5,0.0);
     var c=0.5f;
-    if(d < pos_in.frame_pos.z || true){
-        c=d;
+    if(textureSample(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r < 1.0 || true){
         var pos:vec3<i32> = context.player_pos + pos_in.chunk_pos;
         let id:u32 = (u32(imod(pos.x, context.width)) + u32(context.width*imod(pos.y, context.height)) + u32(context.width*context.height*imod(pos.z, context.width)))*6u;
         if(pos_in.chunk_pos.x>=0){

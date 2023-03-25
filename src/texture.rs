@@ -30,9 +30,19 @@ impl Texture {
             format: DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                  | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[DEPTH_FORMAT],
         };
         let texture = device.create_texture(&desc);
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&wgpu::TextureViewDescriptor{
+            label: None,
+            format: None,
+            dimension: None,
+            aspect: Default::default(),
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
         Texture { texture, view }
     }
 
@@ -70,6 +80,7 @@ impl Texture {
             usage: wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
         });
 
         queue.write_texture(
@@ -112,6 +123,7 @@ impl Texture {
             usage: wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
         });
         let mut rgba = vec![];
         for i in 0..img.len() {

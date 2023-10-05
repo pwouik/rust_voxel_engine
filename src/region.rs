@@ -1,12 +1,11 @@
 use crate::block::Block;
 use crate::chunk::Chunk;
 use bytemuck::Contiguous;
-use cgmath::Point3;
-use lz4_flex::{compress, decompress};
+use glam::IVec3;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 
-fn pos_to_id(pos: Point3<i32>) -> usize {
+fn pos_to_id(pos: IVec3) -> usize {
     return (((pos.x as u32 & 15) + 16 * (pos.y as u32 & 3) + 16 * 4 * (pos.z as u32 & 15)) * 2)
         as usize;
 }
@@ -16,7 +15,7 @@ pub struct Region {
     pub chunk_count: u32,
 }
 impl Region {
-    pub fn new(save_file: String, pos: Point3<i32>) -> Self {
+    pub fn new(save_file: String, pos: IVec3) -> Self {
         let filename = save_file.clone()
             + "/region/"
             + &*pos.x.to_string()
@@ -123,7 +122,7 @@ impl Region {
         compressed_data
     }
     #[profiling::function]
-    pub fn save_chunk(&mut self, mut chunk: Box<Chunk>, pos: Point3<i32>) {
+    pub fn save_chunk(&mut self, mut chunk: Box<Chunk>, pos: IVec3) {
         self.chunk_count -= 1;
         let location = pos_to_id(pos);
         let compressed_chunk = Region::compress_chunk(&mut chunk);
@@ -149,7 +148,7 @@ impl Region {
         }
     }
     #[profiling::function]
-    pub fn load_chunk(&mut self, pos: Point3<i32>) -> Option<Box<Chunk>> {
+    pub fn load_chunk(&mut self, pos: IVec3) -> Option<Box<Chunk>> {
         self.chunk_count += 1;
         let location = pos_to_id(pos);
         let data_size = self.index[location + 1] as usize;

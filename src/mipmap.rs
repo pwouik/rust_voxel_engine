@@ -1,7 +1,6 @@
-use crate::texture::Texture;
 use std::borrow::Cow;
 use std::default::Default;
-use std::num::NonZeroU32;
+use wgpu::StoreOp;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -113,10 +112,12 @@ pub fn generate_mipmaps(
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                        store: true,
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.set_bind_group(0, &texture_bind_group, &[]);

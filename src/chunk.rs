@@ -1,13 +1,7 @@
 use crate::block::*;
-use cgmath::{point3, vec3, Point3};
+use glam::{ivec3, DVec3, IVec3, UVec3};
 use noise::{NoiseFn, SuperSimplex};
 
-fn p3i32_to_f64(point: Point3<i32>) -> Point3<f64> {
-    point3(point.x as f64, point.y as f64, point.z as f64)
-}
-fn p3f64_to_array(point: Point3<f64>) -> [f64; 3] {
-    point.into()
-}
 pub struct Chunk {
     pub data: [Block; 32 * 32 * 32],
 }
@@ -18,12 +12,12 @@ impl Chunk {
         Chunk { data }
     }
     #[profiling::function]
-    pub fn generate(&mut self, pos: Point3<i32>) {
+    pub fn generate(&mut self, pos: IVec3) {
         let ssn = SuperSimplex::new(0);
         for x in 0i32..32 {
             for z in 0i32..32 {
                 for y in 0i32..32 {
-                    let world_pos = p3i32_to_f64(pos * 32 + vec3(x, y, z));
+                    let world_pos: DVec3 = (pos * 32 + ivec3(x, y, z)).into();
                     let height = world_pos.y as f64
                         - (60.0 * ssn.get([world_pos.x / 400.0, world_pos.z / 400.0])
                             + 30.0
@@ -45,10 +39,10 @@ impl Chunk {
             }
         }
     }
-    pub fn get_block(&self, pos: Point3<u32>) -> Block {
+    pub fn get_block(&self, pos: UVec3) -> Block {
         self.data[(pos.x + (pos.z << 5) + (pos.y << 10)) as usize]
     }
-    pub fn set_block(&mut self, pos: Point3<u32>, value: Block) {
+    pub fn set_block(&mut self, pos: UVec3, value: Block) {
         self.data[(pos.x + (pos.z << 5) + (pos.y << 10)) as usize] = value;
     }
 }

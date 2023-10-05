@@ -3,14 +3,16 @@ use crate::chunk_loader::{
 };
 use crate::mesh::Face;
 use crate::mipmap;
+use crate::render_region::{RenderRegion, RENDER_REGION_CHUNKS};
 use crate::texture::*;
-use cgmath::{point3, vec3, InnerSpace, Point3, Vector3};
+use glam::{ivec3, IVec3, Vec3};
 use std::borrow::Cow;
-use std::convert::TryInto;
-use std::sync::Arc;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, Ordering};
-use wgpu::BufferSize;
+use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use wgpu::BindGroupLayout;
+
 pub const IMAGES: [&str; 4] = [
     "textures/grass_side.png",
     "textures/grass_top.png",
@@ -19,26 +21,15 @@ pub const IMAGES: [&str; 4] = [
 ];
 
 pub struct ChunkRenderer {
-    index: Vec<[u32; 3]>,
-    rendered_chunks: Vec<u32>,
-    box_buffer: wgpu::Buffer,
-    count_buffer: wgpu::Buffer,
-    staging_count_buffer: wgpu::Buffer,
-    count_map_flag:Arc<AtomicU8>,
-    count:u32,
-    visibility_buffer: wgpu::Buffer,
-    indirect_buffer: wgpu::Buffer,
-    chunk_table_buffer: wgpu::Buffer,
-    face_buffer: wgpu::Buffer,
-    face_bind_group: wgpu::BindGroup,
-    diffuse_bind_group: wgpu::BindGroup,
-    occlusion_bind_group: wgpu::BindGroup,
-    occlusion_collect_bind_group: wgpu::BindGroup,
     texture_array: Texture,
-    occlusion_pipeline: wgpu::RenderPipeline,
-    dummy_pipeline: wgpu::RenderPipeline,
-    compute_pipeline: wgpu::ComputePipeline,
     render_pipeline: wgpu::RenderPipeline,
+    occlusion_pipeline: wgpu::RenderPipeline,
+    compute_pipeline: wgpu::ComputePipeline,
+    diffuse_bind_group: wgpu::BindGroup,
+    map: HashMap<IVec3, RenderRegion>,
+    region_bind_group_layout: wgpu::BindGroupLayout,
+    occlusion_bind_group_layout: wgpu::BindGroupLayout,
+    occlusion_collect_bind_group_layout: wgpu::BindGroupLayout,
 }
 impl ChunkRenderer {
     pub fn new(
@@ -47,7 +38,7 @@ impl ChunkRenderer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         context_bind_group_layout: &wgpu::BindGroupLayout,
-        depth_bind_group_layout: &wgpu::BindGroupLayout,
+        depth_bind_group_layout: &BindGroupLayout,
     ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -108,34 +99,52 @@ impl ChunkRenderer {
             label: Some("diffuse_bind_group"),
         });
 
-        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("chunk shader module"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("chunk.wgsl"))),
-        });
-        let occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion.wgsl"))),
-        });
-        let dummy_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("dummy.wgsl"))),
-        });
-        let cs_occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion_collect.wgsl"))),
-        });
-        let box_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("box Buffer"),
-            size: (NB_CHUNKS * 4).into(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let visibility_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("visibility Buffer"),
-            size: (NB_CHUNKS * 4 * 6).into(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let occlusion_collect_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("command_bind_group_layout"),
+            });
         let occlusion_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -162,24 +171,18 @@ impl ChunkRenderer {
                 ],
                 label: Some("occlusion_bind_group_layout"),
             });
-        let occlusion_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &occlusion_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: box_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: visibility_buffer.as_entire_binding(),
-                },
-            ],
-            label: Some("occlusion_bind_group"),
+        let occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion.wgsl"))),
         });
         let occlusion_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&context_bind_group_layout, &occlusion_bind_group_layout, depth_bind_group_layout],
+                bind_group_layouts: &[
+                    &context_bind_group_layout,
+                    depth_bind_group_layout,
+                    &occlusion_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
         let occlusion_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -195,10 +198,7 @@ impl ChunkRenderer {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format.into(),
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -219,150 +219,9 @@ impl ChunkRenderer {
             },
             multiview: None,
         });
-
-        let dummy_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("dummy Pipeline Layout"),
-                bind_group_layouts: &[&context_bind_group_layout, depth_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-        let dummy_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("dummy Pipeline"),
-            layout: Some(&dummy_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &dummy_module,
-                entry_point: "vs_main",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &dummy_module,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format.into(),
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
-
-        let count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Count Buffer"),
-            contents: bytemuck::cast_slice(&[0 as u32]),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_SRC,
-        });
-        let staging_count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Count Buffer"),
-            contents: bytemuck::cast_slice(&[0 as u32]),
-            usage: wgpu::BufferUsages::COPY_DST|wgpu::BufferUsages::MAP_READ,
-        });
-        let count_map_flag=Arc::new(AtomicU8::new(0));
-        let count=0u32;
-        let indirect_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Indirect Buffer"),
-            size: (NB_CHUNKS * 6 * 4 * 4).into(),
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::INDIRECT
-                | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let chunk_table_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Storage Buffer"),
-            size: (NB_CHUNKS * 7 * 4).into(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let occlusion_collect_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-                label: Some("command_bind_group_layout"),
-            });
-        let occlusion_collect_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &occlusion_collect_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: count_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: visibility_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: indirect_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: chunk_table_buffer.as_entire_binding(),
-                },
-            ],
-            label: Some("occlusion_collect_bind_group"),
+        let cs_occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: "occlusion collect shader".into(),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion_collect.wgsl"))),
         });
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -379,7 +238,13 @@ impl ChunkRenderer {
             module: &(cs_occlusion_module),
             entry_point: "main",
         });
-        let face_bind_group_layout =
+
+        let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("chunk shader module"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("chunk.wgsl"))),
+        });
+
+        let region_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -393,29 +258,18 @@ impl ChunkRenderer {
                 }],
                 label: Some("chunk_bind_group_layout"),
             });
-        let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Storage Buffer"),
-            size: (RENDER_DIST2 * RENDER_DIST2) as u64 * 32 * 32 * 3 * 12 * 2 + 240000,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let face_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("face bind group"),
-            layout: &face_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: face_buffer.as_entire_binding(),
-            }],
-        });
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &context_bind_group_layout,
-                    &face_bind_group_layout,
+                    &region_bind_group_layout,
                     &texture_bind_group_layout,
                 ],
-                push_constant_ranges: &[],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::VERTEX,
+                    range: 0..4,
+                }],
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -456,184 +310,100 @@ impl ChunkRenderer {
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            multisample: Default::default(),
             multiview: None,
         });
 
         Self {
-            index: vec![],
-            rendered_chunks: vec![],
-            box_buffer,
-            count_buffer,
-            staging_count_buffer,
-            count_map_flag,
-            count,
-            visibility_buffer,
-            indirect_buffer,
-            chunk_table_buffer,
-            face_buffer,
-            face_bind_group,
             texture_array,
-            diffuse_bind_group,
-            occlusion_bind_group,
-            occlusion_collect_bind_group,
             render_pipeline,
-            compute_pipeline,
             occlusion_pipeline,
-            dummy_pipeline,
+            compute_pipeline,
+            diffuse_bind_group,
+            map: HashMap::new(),
+            region_bind_group_layout,
+            occlusion_bind_group_layout,
+            occlusion_collect_bind_group_layout,
         }
     }
 
-    pub fn add_chunk(&mut self, pos: Point3<i32>, data: &mut [Vec<Face>; 6], queue: &wgpu::Queue) {
-        let mut sizes = [0 as u32; 7];
-        let mut mesh = vec![];
-        for i in 0..6 {
-            sizes[i + 1] = sizes[i] + data[i].len() as u32;
-            mesh.append(&mut data[i]);
+    pub fn add_chunk(
+        &mut self,
+        pos: IVec3,
+        data: &mut [Vec<Face>; 6],
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+    ) {
+        let ipos = ivec3(pos.x & !15, pos.y & !7, pos.z & !15);
+        let region = self.map.get_mut(&ipos);
+        if let Some(region) = region {
+            region.add_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), data, queue);
+        } else {
+            self.map.insert(
+                ipos,
+                RenderRegion::new(
+                    device,
+                    &self.region_bind_group_layout,
+                    &self.occlusion_collect_bind_group_layout,
+                    &self.occlusion_bind_group_layout,
+                ),
+            );
         }
-        let mut i: usize = 0;
-        let mut location = 0;
-        if self.index.len() != 0 && sizes[6] > self.index[0][1] {
-            loop {
-                i += 1;
-                if i >= self.index.len() || self.index[i][1] - self.index[i - 1][2] >= sizes[6] {
-                    break;
-                }
-            }
-            location = self.index[i - 1][2];
-        }
-        for j in 0..7 {
-            sizes[j] += location;
-        }
-        let id = (pos.x.rem_euclid(RENDER_DIST2)
-            + RENDER_DIST2 * pos.y.rem_euclid(RENDER_DIST_HEIGHT2)
-            + RENDER_DIST2 * RENDER_DIST_HEIGHT2 * pos.z.rem_euclid(RENDER_DIST2))
-            as u32;
-        self.index.insert(i as usize, [id, sizes[0], sizes[6]]);
-        queue.write_buffer(
-            &self.chunk_table_buffer,
-            id as u64 * 4 * 7,
-            &bytemuck::cast_slice(&sizes),
-        );
-        queue.write_buffer(
-            &self.face_buffer,
-            sizes[0] as u64 * 12,
-            &bytemuck::cast_slice(&mesh),
-        );
     }
 
-    pub fn remove_chunk(&mut self, pos: Point3<i32>) {
-        let id = (pos.x.rem_euclid(RENDER_DIST2)
-            + RENDER_DIST2 * pos.y.rem_euclid(RENDER_DIST_HEIGHT2)
-            + RENDER_DIST2 * RENDER_DIST_HEIGHT2 * pos.z.rem_euclid(RENDER_DIST2))
-            as u32;
-        let mut i = 0;
-        while i < self.index.len() && self.index[i][0] != id {
-            i += 1;
+    pub fn remove_chunk(&mut self, pos: IVec3, queue: &mut wgpu::Queue) {
+        let ipos = ivec3(pos.x & !15, pos.y & !7, pos.z & !15);
+        let region = self.map.get_mut(&ipos);
+        if let Some(region) = region {
+            region.remove_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), queue);
+        } else {
+            println!("removing already removed chunk {:?}", pos);
         }
-        if i != self.index.len() {
-            self.index.remove(i);
-        };
-        //queue.write_buffer(&self.chunk_table_buffer,id.into(),&vec![0u32;7]);
     }
     pub fn culling(
         &mut self,
-        frustum: [Vector3<f32>; 5],
-        player_pos: Point3<i32>,
+        frustum: [Vec3; 5],
+        player_pos: IVec3,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
         depth_bind_group: &wgpu::BindGroup,
     ) {
-        self.rendered_chunks.clear();
-        for i in 0..self.index.len() {
-            let mut id = self.index[i][0];
-            let x = (id as i32 - player_pos.x + RENDER_DIST).rem_euclid(RENDER_DIST2) - RENDER_DIST;
-            id /= RENDER_DIST2 as u32;
-            let y = (id as i32 - player_pos.y + RENDER_DIST_HEIGHT).rem_euclid(RENDER_DIST_HEIGHT2)
-                - RENDER_DIST_HEIGHT;
-            id /= RENDER_DIST_HEIGHT2 as u32;
-            let z = (id as i32 - player_pos.z + RENDER_DIST).rem_euclid(RENDER_DIST2) - RENDER_DIST;
-            let pos = point3(x, y, z);
-            let fpos = vec3(x as f32, y as f32, z as f32);
-            let mut culled = false;
-            for j in 1..5 {
-                if frustum[j].dot(fpos - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(0., 0., 1.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(0., 1., 0.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(0., 1., 1.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(1., 0., 0.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(1., 0., 1.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(1., 1., 0.) - frustum[0]) < 0.0
-                    && frustum[j].dot(fpos + vec3(1., 1., 1.) - frustum[0]) < 0.0
-                {
-                    culled = true;
-                    break;
-                }
-            }
-            if !culled {
-                self.rendered_chunks.push(
-                    (pos.x + 128) as u32
-                        + (((pos.y + 128) as u32) << 8)
-                        + (((pos.z + 128) as u32) << 16),
-                );
-            }
-        }
-        queue.write_buffer(
-            &self.box_buffer,
-            0u64,
-            bytemuck::cast_slice(&self.rendered_chunks),
-        );
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut occlusion_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Occlusion Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: true,
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Discard,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
-            render_pass.set_pipeline(&self.occlusion_pipeline);
-            render_pass.set_bind_group(0, context_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.occlusion_bind_group, &[]);
-            render_pass.set_bind_group(2, depth_bind_group, &[]);
-            render_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1)
+            occlusion_pass.set_pipeline(&self.occlusion_pipeline);
+            occlusion_pass.set_bind_group(0, context_bind_group, &[]);
+            occlusion_pass.set_bind_group(1, depth_bind_group, &[]);
+            for region in &mut self.map {
+                region.1.frustum(region.0, player_pos, frustum, queue);
+                region.1.occlusion(&mut occlusion_pass);
+            }
         }
         {
-            let mut occlusion_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Occlusion Pass"),
-            });
-            occlusion_pass.set_pipeline(&self.compute_pipeline);
-            occlusion_pass.set_bind_group(0, &context_bind_group, &[]);
-            occlusion_pass.set_bind_group(1, &self.occlusion_collect_bind_group, &[]);
-            occlusion_pass.dispatch_workgroups((NB_CHUNKS / 128) + 1, 1, 1);
-        }
-        encoder.clear_buffer(&self.visibility_buffer, 0u64, None);
-        if self.count_map_flag.load(Ordering::Relaxed)==0{
-            if self.count>0{
-                let buffer_slice = self.staging_count_buffer.slice(..);
-                self.count = u32::from_ne_bytes(bytemuck::cast_slice(&buffer_slice.get_mapped_range()).try_into().unwrap());
-                self.staging_count_buffer.unmap();
-                println!("{}",self.count);
+            let mut occlusion_collect_pass =
+                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Occlusion Pass"),
+                    timestamp_writes: None,
+                });
+            occlusion_collect_pass.set_pipeline(&self.compute_pipeline);
+            occlusion_collect_pass.set_bind_group(0, &context_bind_group, &[]);
+            for region in &mut self.map {
+                region.1.gen_commands(&mut occlusion_collect_pass);
             }
-            self.count=self.count.max(1);
-            encoder.copy_buffer_to_buffer(&self.count_buffer, 0, &self.staging_count_buffer, 0, 4);
-            self.count_map_flag.store(1u8,Ordering::Relaxed);
         }
     }
     pub fn render_chunks(
@@ -642,75 +412,50 @@ impl ChunkRenderer {
         view: &wgpu::TextureView,
         depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
-        depth_bind_group: &wgpu::BindGroup,
+        player_pos: IVec3,
     ) {
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Chunk Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Chunk Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
                     }),
-                    stencil_ops: None,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
                 }),
-            });
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &context_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.face_bind_group, &[]);
-            render_pass.set_bind_group(2, &self.diffuse_bind_group, &[]);
-            render_pass.multi_draw_indirect_count(
-                &self.indirect_buffer,
-                0u64,
-                &self.count_buffer,
-                0u64,
-                self.count*2,
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &context_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.diffuse_bind_group, &[]);
+        for region in &mut self.map {
+            let relative_region_pos = *region.0 - player_pos;
+            render_pass.set_push_constants(
+                wgpu::ShaderStages::VERTEX,
+                0,
+                &[
+                    (relative_region_pos.x + 128) as u8,
+                    (relative_region_pos.y + 128) as u8,
+                    (relative_region_pos.z + 128) as u8,
+                    0u8,
+                ],
             );
-            //render_pass.multi_draw_indirect(&self.indirect_buffer, 0u64, NB_CHUNKS*6);
-        }
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Dummy Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: false,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_texture.view,
-                    depth_ops: None,
-                    stencil_ops: None,
-                }),
-            });
-            render_pass.set_pipeline(&self.dummy_pipeline);
-            render_pass.set_bind_group(0, context_bind_group, &[]);
-            render_pass.set_bind_group(1, depth_bind_group, &[]);
-            render_pass.draw(0..3, 0..1)
-        }
-    }
-    pub fn map_count(&mut self){
-        if self.count_map_flag.load(Ordering::Relaxed)==1{
-            self.count_map_flag.store(2u8,Ordering::Relaxed);
-            let buffer_slice = self.staging_count_buffer.slice(..);
-            let atomic=self.count_map_flag.clone();
-            buffer_slice.map_async(wgpu::MapMode::Read, move |_| atomic.store(0u8,Ordering::Relaxed));
+            region.1.draw(&mut render_pass);
         }
     }
 }

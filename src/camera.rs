@@ -1,15 +1,14 @@
 use crate::block::Block;
 use crate::inputs::*;
 use crate::world::World;
-use cgmath::num_traits::clamp;
-use cgmath::*;
+use glam::{vec3, Mat4, Vec3};
 use winit::event::*;
 
 pub struct Camera {
-    pub pos: Point3<f32>,
-    pub velocity: Vector3<f32>,
-    yaw: Rad<f32>,
-    pitch: Rad<f32>,
+    pub pos: Vec3,
+    pub velocity: Vec3,
+    yaw: f32,
+    pitch: f32,
     speed: f32,
 }
 
@@ -18,50 +17,46 @@ impl Camera {
         Self {
             pos: (10.0, 50.0, 10.0).into(),
             velocity: (0.0, 0.0, 0.0).into(),
-            yaw: Rad(0.0),
-            pitch: Rad(0.0),
+            yaw: 0.0,
+            pitch: 0.0,
             speed,
         }
     }
 
-    pub fn build_view_matrix(&self) -> Matrix4<f32> {
-        Matrix4::look_to_rh(
-            point3(
+    pub fn build_view_matrix(&self) -> Mat4 {
+        Mat4::look_to_rh(
+            vec3(
                 self.pos.x.rem_euclid(32.0),
                 self.pos.y.rem_euclid(32.0),
                 self.pos.z.rem_euclid(32.0),
             ),
             vec3(
-                self.yaw.0.cos() * self.pitch.0.cos(),
-                self.pitch.0.sin(),
-                self.yaw.0.sin() * self.pitch.0.cos(),
+                self.yaw.cos() * self.pitch.cos(),
+                self.pitch.sin(),
+                self.yaw.sin() * self.pitch.cos(),
             ),
-            Vector3::unit_y(),
+            Vec3::Y,
         )
     }
 
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
-        self.pitch = clamp(
-            self.pitch + Rad((-inputs.mouse_motion_y / 200.0) as f32),
-            Rad(-1.5),
-            Rad(1.5),
-        );
-        self.yaw += Rad((inputs.mouse_motion_x / 200.0) as f32);
+        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5, 1.5);
+        self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
-            self.velocity += vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed;
+            self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::A as usize] {
-            self.velocity += vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed * 5.0;
+            self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed * 5.0;
         }
         if inputs.keyboard[VirtualKeyCode::S as usize] {
-            self.velocity += -vec3(self.yaw.0.cos(), 0.0, self.yaw.0.sin()) * self.speed;
+            self.velocity += -vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
         }
 
         if inputs.keyboard[VirtualKeyCode::D as usize] {
-            self.velocity += vec3(-self.yaw.0.sin(), 0.0, self.yaw.0.cos()) * self.speed;
+            self.velocity += vec3(-self.yaw.sin(), 0.0, self.yaw.cos()) * self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::Q as usize] {
-            self.velocity += vec3(self.yaw.0.sin(), 0.0, -self.yaw.0.cos()) * self.speed;
+            self.velocity += vec3(self.yaw.sin(), 0.0, -self.yaw.cos()) * self.speed;
         }
         if inputs.keyboard[VirtualKeyCode::R as usize] {
             self.velocity.y -= self.speed.min(0.1);
@@ -80,9 +75,9 @@ impl Camera {
                 world.raycast(
                     self.pos,
                     vec3(
-                        self.yaw.0.cos() * self.pitch.0.cos(),
-                        self.pitch.0.sin(),
-                        self.yaw.0.sin() * self.pitch.0.cos(),
+                        self.yaw.cos() * self.pitch.cos(),
+                        self.pitch.sin(),
+                        self.yaw.sin() * self.pitch.cos(),
                     ),
                     false,
                 ),
@@ -94,9 +89,9 @@ impl Camera {
                 world.raycast(
                     self.pos,
                     vec3(
-                        self.yaw.0.cos() * self.pitch.0.cos(),
-                        self.pitch.0.sin(),
-                        self.yaw.0.sin() * self.pitch.0.cos(),
+                        self.yaw.cos() * self.pitch.cos(),
+                        self.pitch.sin(),
+                        self.yaw.sin() * self.pitch.cos(),
                     ),
                     true,
                 ),

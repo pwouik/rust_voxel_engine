@@ -1,17 +1,17 @@
-#![feature(hash_drain_filter)]
+#![feature(hash_extract_if)]
 
 use crate::camera::Camera;
 use crate::inputs::Inputs;
 use crate::renderer::Renderer;
 use crate::world::World;
 use profiling::tracy_client;
+use renderdoc::{RenderDoc, V110};
 use std::time::Instant;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use renderdoc::{RenderDoc, V110};
 
 mod block;
 mod camera;
@@ -23,16 +23,14 @@ mod inputs;
 mod mesh;
 mod mipmap;
 mod region;
+mod render_region;
 mod renderer;
 mod texture;
 mod util;
 mod world;
 
 fn main() {
-    let mut rd: RenderDoc<V110> = RenderDoc::new().unwrap();
-    rd.set_capture_keys(&[renderdoc::InputButton::C]);
-    rd.set_capture_option_u32(renderdoc::CaptureOption::AllowVSync, 1);
-    rd.set_capture_option_u32(renderdoc::CaptureOption::ApiValidation, 1);
+    //let mut rd: RenderDoc<V110> = RenderDoc::new().expect("Unable to connect");
 
     env_logger::init();
     tracy_client::Client::start();
@@ -46,7 +44,6 @@ fn main() {
     let mut world = World::new();
     camera.update(&inputs, &mut world);
     let mut counter: i32 = 0;
-    let start_time = Instant::now();
     event_loop.run(move |event, _, control_flow| {
         if !inputs.update(&event, &window) {
             match event {

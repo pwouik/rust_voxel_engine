@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 use anyhow::*;
 use image::GenericImageView;
 
@@ -28,12 +26,11 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[DEPTH_FORMAT],
         };
         let texture = device.create_texture(&desc);
-        let view = texture.create_view(&wgpu::TextureViewDescriptor{
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
             format: None,
             dimension: None,
@@ -43,6 +40,7 @@ impl Texture {
             base_array_layer: 0,
             array_layer_count: None,
         });
+        println!("created depth texture");
         Texture { texture, view }
     }
 
@@ -93,8 +91,8 @@ impl Texture {
             rgba,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: NonZeroU32::new(dimensions.1),
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
             },
             size,
         );
@@ -139,8 +137,8 @@ impl Texture {
             &rgba,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: NonZeroU32::new(dimensions.1),
+                bytes_per_row: Some(4 * dimensions.0),
+                rows_per_image: Some(dimensions.1),
             },
             size,
         );

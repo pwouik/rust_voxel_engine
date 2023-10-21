@@ -1,8 +1,7 @@
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Face {
-    pub pos_dir: [u8; 4],
-    pub texture: u32,
+    pub pos_dir_tex: u32,
     pub light: [u8; 4],
 }
 pub struct Mesh {

@@ -33,6 +33,8 @@ pub struct Renderer {
     depth_bind_group_layout: wgpu::BindGroupLayout,
     depth_bind_group: wgpu::BindGroup,
     depth_sampler: wgpu::Sampler,
+    player_chunk_pos: IVec3,
+    frustum:[Vec3; 5],
     pub chunk_renderer: ChunkRenderer,
 }
 impl Renderer {
@@ -224,6 +226,8 @@ impl Renderer {
             depth_bind_group_layout,
             depth_bind_group,
             depth_sampler,
+            player_chunk_pos: ivec3(0,0,0),
+            frustum: [vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0)],
             chunk_renderer,
             context_bind_group,
         }
@@ -288,16 +292,6 @@ impl Renderer {
 
     #[profiling::function]
     pub fn render(&mut self, camera: &Camera) {
-        let player_pos = ivec3(
-            (camera.pos.x / 32.0).floor() as i32,
-            (camera.pos.y / 32.0).floor() as i32,
-            (camera.pos.z / 32.0).floor() as i32
-        );
-        self.queue.write_buffer(
-            &self.pos_buffer,
-            0,
-            bytemuck::cast_slice(player_pos.as_ref()),
-        );
         let frame = match self.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
@@ -315,8 +309,30 @@ impl Renderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Chunk Render Encoder"),
+                label: Some("Chunk Occlusion Encoder"),
             });
+
+        self.chunk_renderer.culling(
+            self.frustum,
+            self.player_chunk_pos,
+            &self.queue,
+            &mut encoder,
+            &self.depth_texture,
+            &self.context_bind_group,
+            &self.depth_bind_group,
+        );
+        self.queue.submit(iter::once(encoder.finish()));
+        self.player_chunk_pos = ivec3(
+            (camera.pos.x / 32.0).floor() as i32,
+            (camera.pos.y / 32.0).floor() as i32,
+            (camera.pos.z / 32.0).floor() as i32
+        );
+        self.queue.write_buffer(
+            &self.pos_buffer,
+            0,
+            bytemuck::cast_slice(self.player_chunk_pos.as_ref()),
+        );
+        self.frustum = self.get_frustum(&camera);
 
         self.view_matrix = camera.build_view_matrix();
         self.queue.write_buffer(
@@ -326,23 +342,21 @@ impl Renderer {
                 viewproj: *(self.projection * self.view_matrix).as_ref(),
             }]),
         );
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Chunk Render Encoder"),
+            });
+
         self.chunk_renderer.render_chunks(
             &mut encoder,
             &view,
             &self.depth_texture,
             &self.context_bind_group,
-            player_pos,
+            self.player_chunk_pos,
         );
 
-        self.chunk_renderer.culling(
-            self.get_frustum(&camera),
-            player_pos,
-            &self.queue,
-            &mut encoder,
-            &view,
-            &self.context_bind_group,
-            &self.depth_bind_group,
-        );
         self.queue.submit(iter::once(encoder.finish()));
         frame.present();
     }

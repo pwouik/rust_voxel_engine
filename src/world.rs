@@ -7,25 +7,23 @@ use crate::renderer::*;
 use crate::util::direction::*;
 use glam::{ivec3, uvec3, IVec3, UVec3, Vec3};
 use std::collections::HashSet;
+use ahash::AHashSet;
 
-const TEXTURE_INDEX: [[u32; 6]; 3] = [[0, 0, 0, 0, 2, 1], [2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3]];
+const TEXTURE_INDEX: [[u32; 6]; 4] = [[0, 0, 0, 0, 2, 1], [2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3], [4, 4, 4, 4, 4, 4]];
 const FACES_LIGHT: [f32; 6] = [0.4, 0.4, 0.7, 0.7, 0.1, 1.0];
 
 pub struct World {
     pub chunk_map: ChunkMap,
-    chunk_updates: HashSet<IVec3>,
+    chunk_updates: AHashSet<IVec3>,
     chunk_loader: ChunkLoader,
 }
 
 impl World {
     pub fn new() -> World {
-        let chunk_map = ChunkMap::new();
-        let chunk_loader = ChunkLoader::new();
-        let chunk_updates = HashSet::new();
         World {
-            chunk_map,
-            chunk_loader,
-            chunk_updates,
+            chunk_map:ChunkMap::new(),
+            chunk_loader:ChunkLoader::new(),
+            chunk_updates:AHashSet::new(),
         }
     }
     #[profiling::function]
@@ -140,8 +138,7 @@ impl World {
                 * FACES_LIGHT[dir.id as usize]) as u8,
         ];
         storage[dir.id as usize].push(Face {
-            pos_dir: [pos.x as u8, pos.y as u8, pos.z as u8, dir.id],
-            texture,
+            pos_dir_tex: (pos.x&63)|((pos.y&63)<<6)|((pos.z&63)<<12)|((dir.id as u32&7)<<18)|((texture&2047)<<21) ,
             light,
         })
     }

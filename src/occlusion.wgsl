@@ -64,7 +64,7 @@ fn imod(a:i32,b:i32)->i32{
 }
 
 @fragment
-fn fs_main(pos_in: Output)-> @location(0) vec4f{
+fn fs_main(pos_in: Output){
     let tex_pos = pos_in.vertex_pos / pos_in.vertex_pos.w * vec4(1.0,-1.0,1.0,1.0);
     //let d = textureSampleCompare(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r;//textureSampleCompare(depth,depth_sampler,tex_pos.xy*0.5 + 0.5,0.0);
     var c=0.5f;
@@ -91,5 +91,4 @@ fn fs_main(pos_in: Output)-> @location(0) vec4f{
             visibility[id+5u]=1u;
         }
     }
-    discard;//return vec4(saturate(d*100.0),saturate(-d*100.0),0.0,1.0);
 }

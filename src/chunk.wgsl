@@ -5,8 +5,7 @@ struct Output{
     @location(2) @interpolate(flat) light: u32,
 };
 struct Face{
-    pos_dir:u32,
-    tex:u32,
+    pos_dir_tex:u32,
     light:u32,
 };
 
@@ -29,15 +28,15 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32,@builtin(instance_index) ins
     var indices = array<u32,6>(0u,1u,2u,2u,3u,0u);
     let face_vertex_id:u32 = indices[vertex_index%6u];
     let face_id:u32 = vertex_index/6u;
-    let pos_dir:u32 = faces[face_id].pos_dir;
+    let pos_dir_tex:u32 = faces[face_id].pos_dir_tex;
     let pos:vec4f = ((unpack4x8unorm(instance_index) * 255.0) + ((unpack4x8unorm(region) * 255.0) - 128.0)) * 32.0;
     var ret:Output;
     ret.vertex_pos = viewproj * (vec4f(pos.xyz + vec3f(
-        f32(pos_dir&0x000000FFu),
-        f32(extractBits(pos_dir,8u,8u)),
-        f32(extractBits(pos_dir,16u,8u))) + face_vertex(extractBits(pos_dir,24u,8u)*4u+face_vertex_id), 1.0));
+        f32(pos_dir_tex&63u),
+        f32(extractBits(pos_dir_tex,6u,6u)),
+        f32(extractBits(pos_dir_tex,12u,6u))) + face_vertex(extractBits(pos_dir_tex,18u,3u)*4u+face_vertex_id), 1.0));
     ret.tex_coord = uv[face_vertex_id];
-    ret.tex_id = faces[face_id].tex;
+    ret.tex_id = extractBits(pos_dir_tex,21u,11u);
     ret.light = faces[face_id].light;
     return ret;
 }

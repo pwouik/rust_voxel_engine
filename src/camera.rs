@@ -10,6 +10,8 @@ pub struct Camera {
     yaw: f32,
     pitch: f32,
     speed: f32,
+    place_cooldown:u32,
+    break_cooldown:u32
 }
 
 impl Camera {
@@ -20,6 +22,8 @@ impl Camera {
             yaw: 0.0,
             pitch: 0.0,
             speed,
+            place_cooldown: 0,
+            break_cooldown: 0,
         }
     }
 
@@ -40,7 +44,7 @@ impl Camera {
     }
 
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
-        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5, 1.5);
+        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.57, 1.57);
         self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
@@ -70,33 +74,51 @@ impl Camera {
         if inputs.keyboard[VirtualKeyCode::X as usize] {
             self.speed *= 1.05;
         }
-        if inputs.mouse_button_states[0] {
-            world.set_block(
-                world.raycast(
-                    self.pos,
-                    vec3(
-                        self.yaw.cos() * self.pitch.cos(),
-                        self.pitch.sin(),
-                        self.yaw.sin() * self.pitch.cos(),
+        if self.break_cooldown>0{
+            self.break_cooldown-=1;
+        }
+        if inputs.mouse_button_states[0]{
+            if self.break_cooldown == 0{
+                self.break_cooldown = 10;
+                world.set_block(
+                    world.raycast(
+                        self.pos,
+                        vec3(
+                            self.yaw.cos() * self.pitch.cos(),
+                            self.pitch.sin(),
+                            self.yaw.sin() * self.pitch.cos(),
+                        ),
+                        false,
                     ),
-                    false,
-                ),
-                Block { block_type: 0 },
-            );
+                    Block { block_type: 0 },
+                );
+            }
+        }
+        else {
+            self.break_cooldown = 0;
+        }
+        if self.place_cooldown>0{
+            self.place_cooldown-=1;
         }
         if inputs.mouse_button_states[2] {
-            world.set_block(
-                world.raycast(
-                    self.pos,
-                    vec3(
-                        self.yaw.cos() * self.pitch.cos(),
-                        self.pitch.sin(),
-                        self.yaw.sin() * self.pitch.cos(),
+            if self.place_cooldown == 0{
+                self.place_cooldown = 10;
+                world.set_block(
+                    world.raycast(
+                        self.pos,
+                        vec3(
+                            self.yaw.cos() * self.pitch.cos(),
+                            self.pitch.sin(),
+                            self.yaw.sin() * self.pitch.cos(),
+                        ),
+                        true,
                     ),
-                    true,
-                ),
-                Block { block_type: 3 },
-            );
+                    Block { block_type: 4 },
+                );
+            }
+        }
+        else {
+            self.place_cooldown=0;
         }
         self.pos += self.velocity;
         self.velocity *= 0.8;

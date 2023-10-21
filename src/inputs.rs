@@ -1,5 +1,5 @@
 use winit::event::*;
-use winit::window::Window;
+use winit::window::{CursorGrabMode, Window};
 
 pub struct Inputs {
     pub keyboard: [bool; 170],
@@ -8,6 +8,7 @@ pub struct Inputs {
     pub mouse_motion_x: f64,
     pub mouse_motion_y: f64,
     pub mouse_button_states: [bool; 3],
+    cur_lock: bool
 }
 impl Inputs {
     pub fn new() -> Self {
@@ -18,6 +19,7 @@ impl Inputs {
             mouse_motion_x: 0.0,
             mouse_motion_y: 0.0,
             mouse_button_states: [false, false, false],
+            cur_lock: false,
         }
     }
     pub fn reset(&mut self) {
@@ -47,8 +49,21 @@ impl Inputs {
                         },
                     ..
                 } => {
-                    let is_pressed = *state == ElementState::Pressed;
-                    self.keyboard[*key as usize] = is_pressed;
+                    if matches!(key,VirtualKeyCode::L) && *state == ElementState::Pressed{
+                        if self.cur_lock{
+                            self.cur_lock=false;
+                            window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                            window.set_cursor_visible(true);
+                        }
+                        else{
+                            self.cur_lock=true;
+                            window.set_cursor_grab(CursorGrabMode::Confined)
+                                .or_else(|_e| window.set_cursor_grab(CursorGrabMode::Locked))
+                                .unwrap();
+                            window.set_cursor_visible(false);
+                        }
+                    }
+                    self.keyboard[*key as usize] = *state == ElementState::Pressed;
                     true
                 }
                 WindowEvent::MouseInput { state, button, .. } => {

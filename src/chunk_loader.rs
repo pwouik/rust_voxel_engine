@@ -10,11 +10,10 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub const RENDER_DIST: i32 = 8;
-pub const RENDER_DIST_HEIGHT: i32 = 3;
+pub const RENDER_DIST: i32 = 30;
+pub const RENDER_DIST_HEIGHT: i32 = 6;
 pub const RENDER_DIST2: i32 = RENDER_DIST * 2 + 1;
 pub const RENDER_DIST_HEIGHT2: i32 = RENDER_DIST_HEIGHT * 2 + 1;
-pub const NB_CHUNKS: u32 = (RENDER_DIST2 * RENDER_DIST2 * RENDER_DIST_HEIGHT2) as u32;
 
 pub struct ChunkLoader {
     loading_chunks: HashSet<IVec3>,

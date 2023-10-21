@@ -1,15 +1,15 @@
 use crate::block::Block;
 use crate::chunk::Chunk;
-use glam::{ivec3, uvec3, IVec3, UVec3};
-use std::collections::HashMap;
+use glam::{ivec3, uvec3, IVec3};
+use ahash::AHashMap;
 
 pub struct ChunkMap {
-    pub hash_map: HashMap<IVec3, Box<Chunk>>,
+    pub hash_map: AHashMap<IVec3, Box<Chunk>>,
 }
 impl ChunkMap {
     pub fn new() -> Self {
         ChunkMap {
-            hash_map: HashMap::new(),
+            hash_map: AHashMap::new(),
         }
     }
     pub fn get_chunk(&self, pos: IVec3) -> Option<&Box<Chunk>> {

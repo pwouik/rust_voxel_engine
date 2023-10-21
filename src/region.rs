@@ -1,9 +1,11 @@
+use std::fs;
 use crate::block::Block;
 use crate::chunk::Chunk;
 use bytemuck::Contiguous;
 use glam::IVec3;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
 
 fn pos_to_id(pos: IVec3) -> usize {
     return (((pos.x as u32 & 15) + 16 * (pos.y as u32 & 3) + 16 * 4 * (pos.z as u32 & 15)) * 2)
@@ -16,6 +18,9 @@ pub struct Region {
 }
 impl Region {
     pub fn new(save_file: String, pos: IVec3) -> Self {
+        if !Path::new(&(save_file.clone() + "/region")).exists() {
+            fs::create_dir_all(save_file.clone() + "/region").unwrap();
+        }
         let filename = save_file.clone()
             + "/region/"
             + &*pos.x.to_string()

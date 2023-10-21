@@ -1,6 +1,3 @@
-use crate::chunk_loader::{
-    NB_CHUNKS, RENDER_DIST, RENDER_DIST2, RENDER_DIST_HEIGHT, RENDER_DIST_HEIGHT2,
-};
 use crate::mesh::Face;
 use crate::mipmap;
 use crate::render_region::{RenderRegion, RENDER_REGION_CHUNKS};
@@ -8,16 +5,13 @@ use crate::texture::*;
 use glam::{ivec3, IVec3, Vec3};
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
-use wgpu::util::DeviceExt;
-use wgpu::BindGroupLayout;
 
-pub const IMAGES: [&str; 4] = [
+pub const IMAGES: [&str; 5] = [
     "textures/grass_side.png",
     "textures/grass_top.png",
     "textures/grass_bottom.png",
     "textures/stone.png",
+    "textures/brick.png",
 ];
 
 pub struct ChunkRenderer {
@@ -27,9 +21,9 @@ pub struct ChunkRenderer {
     compute_pipeline: wgpu::ComputePipeline,
     diffuse_bind_group: wgpu::BindGroup,
     map: HashMap<IVec3, RenderRegion>,
-    region_bind_group_layout: wgpu::BindGroupLayout,
+    face_bind_group_layout: wgpu::BindGroupLayout,
     occlusion_bind_group_layout: wgpu::BindGroupLayout,
-    occlusion_collect_bind_group_layout: wgpu::BindGroupLayout,
+    scan_bind_group_layout: wgpu::BindGroupLayout,
 }
 impl ChunkRenderer {
     pub fn new(
@@ -38,7 +32,7 @@ impl ChunkRenderer {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
         context_bind_group_layout: &wgpu::BindGroupLayout,
-        depth_bind_group_layout: &BindGroupLayout,
+        depth_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -99,7 +93,7 @@ impl ChunkRenderer {
             label: Some("diffuse_bind_group"),
         });
 
-        let occlusion_collect_bind_group_layout =
+        let scan_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -196,11 +190,7 @@ impl ChunkRenderer {
             fragment: Some(wgpu::FragmentState {
                 module: &occlusion_module,
                 entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format.into(),
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &[],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -211,7 +201,13 @@ impl ChunkRenderer {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState{
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Never,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -220,15 +216,15 @@ impl ChunkRenderer {
             multiview: None,
         });
         let cs_occlusion_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: "occlusion collect shader".into(),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("occlusion_collect.wgsl"))),
+            label: "scan shader".into(),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("scan.wgsl"))),
         });
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &context_bind_group_layout,
-                    &occlusion_collect_bind_group_layout,
+                    &scan_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -321,9 +317,9 @@ impl ChunkRenderer {
             compute_pipeline,
             diffuse_bind_group,
             map: HashMap::new(),
-            region_bind_group_layout,
+            face_bind_group_layout: region_bind_group_layout,
             occlusion_bind_group_layout,
-            occlusion_collect_bind_group_layout,
+            scan_bind_group_layout,
         }
     }
 
@@ -337,14 +333,14 @@ impl ChunkRenderer {
         let ipos = ivec3(pos.x & !15, pos.y & !7, pos.z & !15);
         let region = self.map.get_mut(&ipos);
         if let Some(region) = region {
-            region.add_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), data, queue);
+            region.add_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), data, queue,device,&self.face_bind_group_layout);
         } else {
             self.map.insert(
                 ipos,
                 RenderRegion::new(
                     device,
-                    &self.region_bind_group_layout,
-                    &self.occlusion_collect_bind_group_layout,
+                    &self.face_bind_group_layout,
+                    &self.scan_bind_group_layout,
                     &self.occlusion_bind_group_layout,
                 ),
             );
@@ -357,7 +353,6 @@ impl ChunkRenderer {
         if let Some(region) = region {
             region.remove_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), queue);
         } else {
-            println!("removing already removed chunk {:?}", pos);
         }
     }
     pub fn culling(
@@ -366,22 +361,19 @@ impl ChunkRenderer {
         player_pos: IVec3,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
+        depth_texture: &Texture,
         context_bind_group: &wgpu::BindGroup,
         depth_bind_group: &wgpu::BindGroup,
     ) {
         {
             let mut occlusion_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Occlusion Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Discard,
-                    },
-                })],
-                depth_stencil_attachment: None,
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_texture.view,
+                    depth_ops: None,
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -393,16 +385,19 @@ impl ChunkRenderer {
                 region.1.occlusion(&mut occlusion_pass);
             }
         }
+        for region in &mut self.map {
+            region.1.read_count(encoder);
+        }
         {
-            let mut occlusion_collect_pass =
+            let mut scan_pass =
                 encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Occlusion Pass"),
+                    label: Some("Scan Pass"),
                     timestamp_writes: None,
                 });
-            occlusion_collect_pass.set_pipeline(&self.compute_pipeline);
-            occlusion_collect_pass.set_bind_group(0, &context_bind_group, &[]);
+            scan_pass.set_pipeline(&self.compute_pipeline);
+            scan_pass.set_bind_group(0, &context_bind_group, &[]);
             for region in &mut self.map {
-                region.1.gen_commands(&mut occlusion_collect_pass);
+                region.1.gen_commands(&mut scan_pass);
             }
         }
     }

@@ -5,8 +5,6 @@ use crate::inputs::Inputs;
 use crate::renderer::Renderer;
 use crate::world::World;
 use profiling::tracy_client;
-use renderdoc::{RenderDoc, V110};
-use std::time::Instant;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},

@@ -6,7 +6,6 @@ use crate::mesh::*;
 use crate::renderer::*;
 use crate::util::direction::*;
 use glam::{ivec3, uvec3, IVec3, UVec3, Vec3};
-use std::collections::HashSet;
 use ahash::AHashSet;
 
 const TEXTURE_INDEX: [[u32; 6]; 4] = [[0, 0, 0, 0, 2, 1], [2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3], [4, 4, 4, 4, 4, 4]];
@@ -364,5 +363,13 @@ impl World {
         } else {
             block_pos
         };
+    }
+}
+
+impl Drop for World {
+    fn drop(&mut self) {
+        for i in self.chunk_map.hash_map.drain(){
+            self.chunk_loader.save(i);
+        }
     }
 }

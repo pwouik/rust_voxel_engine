@@ -44,7 +44,7 @@ impl Camera {
     }
 
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
-        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.57, 1.57);
+        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5707963, 1.5707963);
         self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
         if inputs.keyboard[VirtualKeyCode::Z as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;

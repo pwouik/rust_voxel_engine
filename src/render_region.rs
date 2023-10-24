@@ -279,7 +279,7 @@ impl RenderRegion {
     }
 
     pub fn read_count(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        if self.counter%2048==0 {
+        if self.counter%4096==0 {
             self.max_count = self.count;
             self.count = 0;
         }

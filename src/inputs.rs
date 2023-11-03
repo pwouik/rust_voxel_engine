@@ -1,4 +1,5 @@
 use winit::event::*;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
 
 pub struct Inputs {
@@ -41,15 +42,15 @@ impl Inputs {
                 window_id,
             } if *window_id == window.id() => match event {
                 WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            virtual_keycode: Some(key),
+                    event:
+                        KeyEvent {
+                            physical_key:PhysicalKey::Code(key),
                             state,
                             ..
                         },
                     ..
                 } => {
-                    if matches!(key,VirtualKeyCode::L) && *state == ElementState::Pressed{
+                    if matches!(key,KeyCode::KeyL) && *state == ElementState::Pressed{
                         if self.cur_lock{
                             self.cur_lock=false;
                             window.set_cursor_grab(CursorGrabMode::None).unwrap();

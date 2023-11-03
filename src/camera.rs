@@ -3,6 +3,7 @@ use crate::inputs::*;
 use crate::world::World;
 use glam::{vec3, Mat4, Vec3};
 use winit::event::*;
+use winit::keyboard::KeyCode;
 
 pub struct Camera {
     pub pos: Vec3,
@@ -46,32 +47,32 @@ impl Camera {
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
         self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5707963, 1.5707963);
         self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
-        if inputs.keyboard[VirtualKeyCode::Z as usize] {
+        if inputs.keyboard[KeyCode::KeyW as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
         }
-        if inputs.keyboard[VirtualKeyCode::A as usize] {
+        if inputs.keyboard[KeyCode::KeyQ as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed * 5.0;
         }
-        if inputs.keyboard[VirtualKeyCode::S as usize] {
+        if inputs.keyboard[KeyCode::KeyS as usize] {
             self.velocity += -vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
         }
 
-        if inputs.keyboard[VirtualKeyCode::D as usize] {
+        if inputs.keyboard[KeyCode::KeyD as usize] {
             self.velocity += vec3(-self.yaw.sin(), 0.0, self.yaw.cos()) * self.speed;
         }
-        if inputs.keyboard[VirtualKeyCode::Q as usize] {
+        if inputs.keyboard[KeyCode::KeyA as usize] {
             self.velocity += vec3(self.yaw.sin(), 0.0, -self.yaw.cos()) * self.speed;
         }
-        if inputs.keyboard[VirtualKeyCode::R as usize] {
+        if inputs.keyboard[KeyCode::KeyR as usize] {
             self.velocity.y -= self.speed.min(0.1);
         }
-        if inputs.keyboard[VirtualKeyCode::Space as usize] {
+        if inputs.keyboard[KeyCode::Space as usize] {
             self.velocity.y += self.speed.min(0.1);
         }
-        if inputs.keyboard[VirtualKeyCode::W as usize] {
+        if inputs.keyboard[KeyCode::KeyZ as usize] {
             self.speed /= 1.05;
         }
-        if inputs.keyboard[VirtualKeyCode::X as usize] {
+        if inputs.keyboard[KeyCode::KeyX as usize] {
             self.speed *= 1.05;
         }
         if self.break_cooldown>0{

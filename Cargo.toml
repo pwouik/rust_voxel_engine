@@ -10,17 +10,16 @@ profiling = "1.0"
 noise = { git = "https://github.com/Razaekel/noise-rs" , rev="c6942d4"}
 anyhow = "1.0"
 image = "0.24"
-winit = "0.28"
+winit = "0.29"
 glam = "0.24"
 env_logger = "0.10.0"
 log = "0.4"
-wgpu = { path="../wgpu/wgpu" }
+wgpu = { git="https://github.com/gfx-rs/wgpu", rev = "e78e9dd4000635883584f7ce1e297fe2618d8f16" }
 futures = "0.3"
-renderdoc = "0.11"
 bytemuck = { version = "1.14", features = [ "derive" ] }
 crossbeam-channel = "0.5"
 lz4_flex = "0.11"
 ahash = "0.8"
 [features]
-default = ["profiling/profile-with-tracy","wgpu/expose-ids"]
+default = ["profiling/profile-with-tracy"]
 

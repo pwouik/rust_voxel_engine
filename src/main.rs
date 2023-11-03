@@ -7,9 +7,10 @@ use crate::world::World;
 use profiling::tracy_client;
 use winit::{
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::EventLoop,
     window::WindowBuilder,
 };
+use winit::keyboard::{Key, NamedKey};
 
 mod block;
 mod camera;
@@ -28,21 +29,19 @@ mod util;
 mod world;
 
 fn main() {
-    //let mut rd: RenderDoc<V110> = RenderDoc::new().expect("Unable to connect");
-
     env_logger::init();
     tracy_client::Client::start();
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     use futures::executor::block_on;
-    // Since main can't be async, we're going to need to block
+
     let mut renderer = block_on(Renderer::new(&window));
     let mut camera = Camera::new(0.1);
     let mut inputs = Inputs::new();
     let mut world = World::new();
     camera.update(&inputs, &mut world);
     let mut counter: i32 = 0;
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, elwt| {
         if !inputs.update(&event, &window) {
             match event {
                 Event::WindowEvent {
@@ -50,32 +49,23 @@ fn main() {
                     window_id,
                 } if window_id == window.id() => {
                     match event {
-                        WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit;
-                        }
-                        WindowEvent::KeyboardInput { input, .. } => match input {
-                            KeyboardInput {
+                        WindowEvent::CloseRequested => elwt.exit(),
+                        WindowEvent::KeyboardInput {
+                            event: KeyEvent {
                                 state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            } => *control_flow = ControlFlow::Exit,
-
-                            _ => {}
-                        },
+                                logical_key: Key::Named(NamedKey::Escape), ..
+                            }, ..
+                        } => elwt.exit(),
                         WindowEvent::Resized(physical_size) => {
                             renderer.resize(*physical_size);
                         }
-                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            // new_inner_size is &mut so w have to dereference it twice
-                            renderer.resize(**new_inner_size);
+                        WindowEvent::RedrawRequested => {
+                            renderer.render(&camera);
                         }
                         _ => {}
                     }
                 }
-                Event::RedrawRequested(_) => {
-                    renderer.render(&camera);
-                }
-                Event::MainEventsCleared => {
+                Event::AboutToWait => {
                     camera.update(&inputs, &mut world);
                     inputs.reset();
                     counter += 1;
@@ -89,5 +79,5 @@ fn main() {
                 _ => {}
             }
         }
-    });
+    }).unwrap();
 }

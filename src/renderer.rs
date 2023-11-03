@@ -1,7 +1,6 @@
 use crate::camera::Camera;
 use crate::chunk_loader::{RENDER_DIST, RENDER_DIST2, RENDER_DIST_HEIGHT, RENDER_DIST_HEIGHT2};
 use crate::texture::Texture;
-use std::fmt::Display;
 
 use crate::chunk_renderer::ChunkRenderer;
 use glam::*;
@@ -43,7 +42,7 @@ impl Renderer {
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
         let instance = wgpu::Instance::default();
-        let surface = unsafe { instance.create_surface(window) }.unwrap();
+        let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),

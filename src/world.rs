@@ -154,9 +154,9 @@ impl World {
         for y in 0..32 {
             for z in 0..32 {
                 for x in 0..32 {
-                    let block1 = chunk.data[index];
+                    let block1 = chunk.get_block(uvec3(x,y,z));
                     let mut block2: Block = if x < 31 {
-                        chunk.data[index + 1]
+                        chunk.get_block(uvec3(x+1,y,z))
                     } else {
                         if let Some(chunk) = adjacent_chunks[0] {
                             chunk.get_block(uvec3(0, y, z))
@@ -186,7 +186,7 @@ impl World {
                         }
                     }
                     block2 = if z < 31 {
-                        chunk.data[index + 32]
+                        chunk.get_block(uvec3(x,y,z+1))
                     } else {
                         if let Some(chunk) = adjacent_chunks[1] {
                             chunk.get_block(uvec3(x, y, 0))
@@ -216,7 +216,7 @@ impl World {
                     }
 
                     block2 = if y < 31 {
-                        chunk.data[index + 32 * 32]
+                        chunk.get_block(uvec3(x,y+1,z))
                     } else {
                         if let Some(chunk) = adjacent_chunks[2] {
                             chunk.get_block(uvec3(x, 0, z))

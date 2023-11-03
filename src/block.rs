@@ -1,7 +1,7 @@
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Block {
-    pub block_type: u8,
+    pub block_type: u16,
 }
 
 impl Block {

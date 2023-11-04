@@ -4,7 +4,8 @@ use crate::camera::Camera;
 use crate::inputs::Inputs;
 use crate::renderer::Renderer;
 use crate::world::World;
-use profiling::tracy_client;
+#[cfg(feature = "profile-with-tracy")]
+use  profiling::tracy_client;
 use winit::{
     event::*,
     event_loop::EventLoop,
@@ -30,6 +31,7 @@ mod world;
 
 fn main() {
     env_logger::init();
+    #[cfg(feature = "profile-with-tracy")]
     tracy_client::Client::start();
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();

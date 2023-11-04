@@ -24,6 +24,7 @@ impl Chunk {
             data: vec![0; 512],
         }
     }
+    #[profiling::function]
     pub fn deserialize(&mut self, buffer: &[u8]) {
         let palette_len = u16::from_le_bytes(buffer[..2].try_into().unwrap()) as usize;
         self.palette.clear();
@@ -44,6 +45,7 @@ impl Chunk {
         self.mask = (1 << self.bitsize) - 1;
         self.blocks_per_element = 64/self.bitsize as u64;
     }
+    #[profiling::function]
     pub fn serialize(&self)->Vec<u8>{
         let mut buffer = vec![];
         buffer.extend_from_slice(&(self.palette.len() as u16).to_le_bytes());
@@ -98,6 +100,7 @@ impl Chunk {
         let value = self.block_to_id(block).unwrap_or_else(|| -> u16 {
             self.palette.push(block.block_type);
             if self.mask < self.palette.len() as u64 - 1 {
+                profiling::scope!("Resize");
                 self.bitsizes_index += 1;
                 let new_bitsize = BITSIZES[self.bitsizes_index];
                 let new_blocks_per_element = (64 / new_bitsize) as u64;

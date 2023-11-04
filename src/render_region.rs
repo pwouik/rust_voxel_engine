@@ -30,6 +30,7 @@ pub struct RenderRegion {
 }
 
 impl RenderRegion {
+    #[profiling::function]
     pub fn new(
         device: &wgpu::Device,
         face_bind_group_layout: &wgpu::BindGroupLayout,
@@ -146,6 +147,7 @@ impl RenderRegion {
             rendered_chunks: vec![],
         }
     }
+    #[profiling::function]
     fn resize(&mut self,size:u64,queue: &wgpu::Queue, device:&wgpu::Device, face_bind_group_layout:&wgpu::BindGroupLayout){
         let tmp_face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Storage Buffer"),
@@ -168,6 +170,7 @@ impl RenderRegion {
             }],
         });
     }
+    #[profiling::function]
     pub fn add_chunk(&mut self, pos: IVec3, data: &mut [Vec<Face>; 6], queue: &wgpu::Queue, device:&wgpu::Device, face_bind_group_layout:&wgpu::BindGroupLayout) {
         let mut sizes = [0u32; 7];
         let mut mesh = vec![];
@@ -208,6 +211,7 @@ impl RenderRegion {
             &bytemuck::cast_slice(&mesh),
         );
     }
+    #[profiling::function]
     pub fn remove_chunk(&mut self, pos: IVec3, queue: &mut wgpu::Queue) {
         let id = (pos.x
             + RENDER_REGION_SIZE * pos.y
@@ -225,6 +229,7 @@ impl RenderRegion {
             &bytemuck::cast_slice(&[0u32; 7]),
         );
     }
+    #[profiling::function]
     pub fn frustum(
         &mut self,
         region_pos: &IVec3,
@@ -273,11 +278,13 @@ impl RenderRegion {
             bytemuck::cast_slice(&self.rendered_chunks),
         );
     }
+    #[profiling::function]
     pub fn occlusion<'a>(&'a mut self, occlusion_pass: &mut wgpu::RenderPass<'a>) {
         occlusion_pass.set_bind_group(2, &self.occlusion_bind_group, &[]);
         occlusion_pass.draw(0..(self.rendered_chunks.len() * 18) as u32, 0..1);
     }
 
+    #[profiling::function]
     pub fn read_count(&mut self, encoder: &mut wgpu::CommandEncoder) {
         if self.counter%4096==0 {
             self.max_count = self.count;
@@ -305,6 +312,7 @@ impl RenderRegion {
         encoder.clear_buffer(&self.count_buffer, 0u64, None);
         self.counter+=1;
     }
+    #[profiling::function]
     pub fn gen_commands<'a>(&'a mut self, scan_pass: &mut wgpu::ComputePass<'a>) {
         scan_pass.set_bind_group(1, &self.scan_bind_group, &[]);
         scan_pass.dispatch_workgroups(
@@ -313,6 +321,7 @@ impl RenderRegion {
             RENDER_REGION_SIZE as u32,
         );
     }
+    #[profiling::function]
     pub fn draw<'a>(&'a mut self, render_pass: &mut wgpu::RenderPass<'a>) {
         render_pass.set_bind_group(1, &self.bind_group, &[]);
         render_pass.multi_draw_indirect_count(

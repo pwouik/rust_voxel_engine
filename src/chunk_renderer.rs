@@ -26,6 +26,7 @@ pub struct ChunkRenderer {
     scan_bind_group_layout: wgpu::BindGroupLayout,
 }
 impl ChunkRenderer {
+    #[profiling::function]
     pub fn new(
         device: &wgpu::Device,
         init_encoder: &mut wgpu::CommandEncoder,
@@ -323,6 +324,7 @@ impl ChunkRenderer {
         }
     }
 
+    #[profiling::function]
     pub fn add_chunk(
         &mut self,
         pos: IVec3,
@@ -346,7 +348,7 @@ impl ChunkRenderer {
             );
         }
     }
-
+    #[profiling::function]
     pub fn remove_chunk(&mut self, pos: IVec3, queue: &mut wgpu::Queue) {
         let ipos = ivec3(pos.x & !15, pos.y & !7, pos.z & !15);
         let region = self.map.get_mut(&ipos);
@@ -355,6 +357,7 @@ impl ChunkRenderer {
         } else {
         }
     }
+    #[profiling::function]
     pub fn culling(
         &mut self,
         frustum: [Vec3; 5],
@@ -401,6 +404,7 @@ impl ChunkRenderer {
             }
         }
     }
+    #[profiling::function]
     pub fn render_chunks(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,

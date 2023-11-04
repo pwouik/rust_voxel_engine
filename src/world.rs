@@ -90,6 +90,7 @@ impl World {
             }
         }
     }
+    #[profiling::function]
     fn add_face(
         &self,
         storage: &mut [Vec<Face>; 6],

@@ -37,11 +37,15 @@ pub struct Renderer {
     pub chunk_renderer: ChunkRenderer,
 }
 impl Renderer {
+    #[profiling::function]
     pub async fn new(window: &Window) -> Self {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor{
+            backends:wgpu::Backends::PRIMARY,
+            ..wgpu::InstanceDescriptor::default()
+        });
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {

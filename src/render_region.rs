@@ -1,8 +1,8 @@
-use std::convert::TryInto;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU8, Ordering};
 use crate::mesh::Face;
 use glam::{ivec3, vec3, IVec3, Vec3};
+use std::convert::TryInto;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 const RENDER_REGION_SIZE: i32 = 16;
@@ -16,12 +16,12 @@ pub struct RenderRegion {
     visibility_buffer: wgpu::Buffer,
     count_buffer: wgpu::Buffer,
     staging_count_buffer: wgpu::Buffer,
-    count_map_flag:Arc<AtomicU8>,
-    max_count:u32,
-    count:u32,
-    counter:usize,
+    count_map_flag: Arc<AtomicU8>,
+    max_count: u32,
+    count: u32,
+    counter: usize,
     face_buffer: wgpu::Buffer,
-    face_buffer_len:u64,
+    face_buffer_len: u64,
     box_buffer: wgpu::Buffer,
     scan_bind_group: wgpu::BindGroup,
     occlusion_bind_group: wgpu::BindGroup,
@@ -37,11 +37,13 @@ impl RenderRegion {
         scan_bind_group_layout: &wgpu::BindGroupLayout,
         occlusion_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let face_buffer_len= 32*32*3;
+        let face_buffer_len = 32 * 32 * 3;
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Storage Buffer"),
             size: face_buffer_len,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -67,15 +69,18 @@ impl RenderRegion {
         let count_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("count Buffer"),
             size: 4u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::INDIRECT
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let staging_count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Count Buffer"),
             contents: bytemuck::cast_slice(&[0u32]),
-            usage: wgpu::BufferUsages::COPY_DST|wgpu::BufferUsages::MAP_READ,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         });
-        let count_map_flag=Arc::new(AtomicU8::new(0));
+        let count_map_flag = Arc::new(AtomicU8::new(0));
         let scan_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &scan_bind_group_layout,
             entries: &[
@@ -136,7 +141,7 @@ impl RenderRegion {
             staging_count_buffer,
             count_map_flag,
             max_count: RENDER_REGION_CHUNKS as u32 * 6,
-            count:  RENDER_REGION_CHUNKS as u32 * 6,
+            count: RENDER_REGION_CHUNKS as u32 * 6,
             counter: 0,
             face_buffer,
             face_buffer_len,
@@ -148,15 +153,31 @@ impl RenderRegion {
         }
     }
     #[profiling::function]
-    fn resize(&mut self,size:u64,queue: &wgpu::Queue, device:&wgpu::Device, face_bind_group_layout:&wgpu::BindGroupLayout){
+    fn resize(
+        &mut self,
+        size: u64,
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        face_bind_group_layout: &wgpu::BindGroupLayout,
+    ) {
         let tmp_face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Storage Buffer"),
             size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor{ label: Some("resize")});
-        encoder.copy_buffer_to_buffer(&self.face_buffer,0,&tmp_face_buffer,0,self.face_buffer_len);
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("resize"),
+        });
+        encoder.copy_buffer_to_buffer(
+            &self.face_buffer,
+            0,
+            &tmp_face_buffer,
+            0,
+            self.face_buffer_len,
+        );
         queue.submit(Some(encoder.finish()));
         self.face_buffer = tmp_face_buffer;
         self.face_buffer_len = size;
@@ -171,7 +192,14 @@ impl RenderRegion {
         });
     }
     #[profiling::function]
-    pub fn add_chunk(&mut self, pos: IVec3, data: &mut [Vec<Face>; 6], queue: &wgpu::Queue, device:&wgpu::Device, face_bind_group_layout:&wgpu::BindGroupLayout) {
+    pub fn add_chunk(
+        &mut self,
+        pos: IVec3,
+        data: &mut [Vec<Face>; 6],
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        face_bind_group_layout: &wgpu::BindGroupLayout,
+    ) {
         let mut sizes = [0u32; 7];
         let mut mesh = vec![];
         for i in 0..6 {
@@ -198,7 +226,12 @@ impl RenderRegion {
             + RENDER_REGION_SIZE * RENDER_REGION_SIZE_HEIGHT * pos.z) as u32;
         self.index.insert(i, [id, sizes[0], sizes[6]]);
         if sizes[6] as u64 * std::mem::size_of::<Face>() as u64 > self.face_buffer_len {
-            self.resize(sizes[6] as u64 * std::mem::size_of::<Face>() as u64 * 2,queue,device,face_bind_group_layout);
+            self.resize(
+                sizes[6] as u64 * std::mem::size_of::<Face>() as u64 * 2,
+                queue,
+                device,
+                face_bind_group_layout,
+            );
         }
         queue.write_buffer(
             &self.index_buffer,
@@ -286,31 +319,37 @@ impl RenderRegion {
 
     #[profiling::function]
     pub fn read_count(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        if self.counter%4096==0 {
+        if self.counter % 4096 == 0 {
             self.max_count = self.count;
             self.count = 0;
         }
-        if self.count_map_flag.load(Ordering::Relaxed)==1{
+        if self.count_map_flag.load(Ordering::Relaxed) == 1 {
             let buffer_slice = self.staging_count_buffer.slice(..);
-            let atomic=self.count_map_flag.clone();
-            buffer_slice.map_async(wgpu::MapMode::Read, move |_| atomic.store(3u8,Ordering::Relaxed));
-            self.count_map_flag.store(2u8,Ordering::Relaxed);
+            let atomic = self.count_map_flag.clone();
+            buffer_slice.map_async(wgpu::MapMode::Read, move |_| {
+                atomic.store(3u8, Ordering::Relaxed)
+            });
+            self.count_map_flag.store(2u8, Ordering::Relaxed);
         }
-        if self.count_map_flag.load(Ordering::Relaxed)==0 && self.counter%4 == 0{
+        if self.count_map_flag.load(Ordering::Relaxed) == 0 && self.counter % 4 == 0 {
             encoder.copy_buffer_to_buffer(&self.count_buffer, 0, &self.staging_count_buffer, 0, 4);
-            self.count_map_flag.store(1u8,Ordering::Relaxed);//make sure the copy is submitted
+            self.count_map_flag.store(1u8, Ordering::Relaxed); //make sure the copy is submitted
         }
-        if self.count_map_flag.load(Ordering::Relaxed)==3 {
+        if self.count_map_flag.load(Ordering::Relaxed) == 3 {
             {
                 let buffer_slice = self.staging_count_buffer.slice(..);
-                self.count = self.count.max(u32::from_ne_bytes(bytemuck::cast_slice(&buffer_slice.get_mapped_range()).try_into().unwrap()));
+                self.count = self.count.max(u32::from_ne_bytes(
+                    bytemuck::cast_slice(&buffer_slice.get_mapped_range())
+                        .try_into()
+                        .unwrap(),
+                ));
             }
             self.staging_count_buffer.unmap();
-            self.max_count=self.max_count.max(self.count);
-            self.count_map_flag.store(0u8,Ordering::Relaxed);
+            self.max_count = self.max_count.max(self.count);
+            self.count_map_flag.store(0u8, Ordering::Relaxed);
         }
         encoder.clear_buffer(&self.count_buffer, 0u64, None);
-        self.counter+=1;
+        self.counter += 1;
     }
     #[profiling::function]
     pub fn gen_commands<'a>(&'a mut self, scan_pass: &mut wgpu::ComputePass<'a>) {
@@ -332,5 +371,4 @@ impl RenderRegion {
             self.max_count,
         );
     }
-
 }

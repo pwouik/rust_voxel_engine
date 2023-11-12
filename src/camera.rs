@@ -11,8 +11,8 @@ pub struct Camera {
     yaw: f32,
     pitch: f32,
     speed: f32,
-    place_cooldown:u32,
-    break_cooldown:u32
+    place_cooldown: u32,
+    break_cooldown: u32,
 }
 
 impl Camera {
@@ -45,7 +45,8 @@ impl Camera {
     }
 
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
-        self.pitch = (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5707963, 1.5707963);
+        self.pitch =
+            (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5707963, 1.5707963);
         self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
         if inputs.keyboard[KeyCode::KeyW as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
@@ -75,11 +76,11 @@ impl Camera {
         if inputs.keyboard[KeyCode::KeyX as usize] {
             self.speed *= 1.05;
         }
-        if self.break_cooldown>0{
-            self.break_cooldown-=1;
+        if self.break_cooldown > 0 {
+            self.break_cooldown -= 1;
         }
-        if inputs.mouse_button_states[0]{
-            if self.break_cooldown == 0{
+        if inputs.mouse_button_states[0] {
+            if self.break_cooldown == 0 {
                 self.break_cooldown = 10;
                 world.set_block(
                     world.raycast(
@@ -94,15 +95,14 @@ impl Camera {
                     Block { block_type: 0 },
                 );
             }
-        }
-        else {
+        } else {
             self.break_cooldown = 0;
         }
-        if self.place_cooldown>0{
-            self.place_cooldown-=1;
+        if self.place_cooldown > 0 {
+            self.place_cooldown -= 1;
         }
         if inputs.mouse_button_states[2] {
-            if self.place_cooldown == 0{
+            if self.place_cooldown == 0 {
                 self.place_cooldown = 10;
                 world.set_block(
                     world.raycast(
@@ -117,9 +117,8 @@ impl Camera {
                     Block { block_type: 4 },
                 );
             }
-        }
-        else {
-            self.place_cooldown=0;
+        } else {
+            self.place_cooldown = 0;
         }
         self.pos += self.velocity;
         self.velocity *= 0.8;

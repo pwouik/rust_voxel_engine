@@ -202,7 +202,7 @@ impl ChunkRenderer {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: Some(wgpu::DepthStencilState{
+            depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Never,
@@ -223,10 +223,7 @@ impl ChunkRenderer {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    &context_bind_group_layout,
-                    &scan_bind_group_layout,
-                ],
+                bind_group_layouts: &[&context_bind_group_layout, &scan_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -335,7 +332,13 @@ impl ChunkRenderer {
         let ipos = ivec3(pos.x & !15, pos.y & !7, pos.z & !15);
         let region = self.map.get_mut(&ipos);
         if let Some(region) = region {
-            region.add_chunk(ivec3(pos.x & 15, pos.y & 7, pos.z & 15), data, queue,device,&self.face_bind_group_layout);
+            region.add_chunk(
+                ivec3(pos.x & 15, pos.y & 7, pos.z & 15),
+                data,
+                queue,
+                device,
+                &self.face_bind_group_layout,
+            );
         } else {
             self.map.insert(
                 ipos,
@@ -392,11 +395,10 @@ impl ChunkRenderer {
             region.1.read_count(encoder);
         }
         {
-            let mut scan_pass =
-                encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Scan Pass"),
-                    timestamp_writes: None,
-                });
+            let mut scan_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Scan Pass"),
+                timestamp_writes: None,
+            });
             scan_pass.set_pipeline(&self.compute_pipeline);
             scan_pass.set_bind_group(0, &context_bind_group, &[]);
             for region in &mut self.map {

@@ -1,3 +1,4 @@
+use std::sync::mpsc;
 use crate::block::Block;
 use crate::camera::Camera;
 use crate::chunk_loader::*;
@@ -5,24 +6,38 @@ use crate::chunk_map::ChunkMap;
 use crate::mesh::*;
 use crate::renderer::*;
 use crate::util::direction::*;
-use glam::{ivec3, uvec3, IVec3, UVec3, Vec3};
+use crate::chunk::Chunk;
+use crate::util::threadpool::ThreadPool;
 use ahash::AHashSet;
+use glam::{ivec3, uvec3, IVec3, UVec3, Vec3};
 
-const TEXTURE_INDEX: [[u32; 6]; 4] = [[0, 0, 0, 0, 2, 1], [2, 2, 2, 2, 2, 2], [3, 3, 3, 3, 3, 3], [4, 4, 4, 4, 4, 4]];
+const TEXTURE_INDEX: [[u32; 6]; 4] = [
+    [0, 0, 0, 0, 2, 1],
+    [2, 2, 2, 2, 2, 2],
+    [3, 3, 3, 3, 3, 3],
+    [4, 4, 4, 4, 4, 4],
+];
 const FACES_LIGHT: [f32; 6] = [0.4, 0.4, 0.7, 0.7, 0.1, 1.0];
 
 pub struct World {
     pub chunk_map: ChunkMap,
     chunk_updates: AHashSet<IVec3>,
     chunk_loader: ChunkLoader,
+    threadpool:ThreadPool<(IVec3,[Box<Chunk>;27]),(IVec3, [Vec<Face>; 6])>,
+    threadpool_receiver: mpsc::Receiver<(IVec3, [Vec<Face>; 6])>,
 }
 
 impl World {
     pub fn new() -> World {
+        let (threadpool_receiver,threadpool) = ThreadPool::new(|chunks:(IVec3,[Box<Chunk>;27])|{
+            return (chunks.0,World::create_mesh(chunks.1));
+        });
         World {
-            chunk_map:ChunkMap::new(),
-            chunk_loader:ChunkLoader::new(),
-            chunk_updates:AHashSet::new(),
+            chunk_map: ChunkMap::new(),
+            chunk_loader: ChunkLoader::new(),
+            chunk_updates: AHashSet::new(),
+            threadpool,
+            threadpool_receiver,
         }
     }
     #[profiling::function]
@@ -32,13 +47,31 @@ impl World {
             match chunk_result {
                 Some(chunk) => {
                     self.chunk_map.hash_map.insert(chunk.0, chunk.1);
-                    self.chunk_updates.insert(chunk.0);
-                    self.chunk_updates.insert(chunk.0 + ivec3(-1, 0, 0));
-                    self.chunk_updates.insert(chunk.0 + ivec3(0, -1, 0));
-                    self.chunk_updates.insert(chunk.0 + ivec3(0, 0, -1));
-                    self.chunk_updates.insert(chunk.0 + ivec3(1, 0, 0));
-                    self.chunk_updates.insert(chunk.0 + ivec3(0, 1, 0));
-                    self.chunk_updates.insert(chunk.0 + ivec3(0, 0, 1));
+                    let mut surrounded = [[[true; 3]; 3]; 3];
+                    for x in -2..3{
+                        for y in -2..3{
+                            for z in -2..3{
+                                if self.chunk_map.get_chunk(chunk.0+ivec3(x,y,z)).is_none(){
+                                    for x2 in 0.max(x+1)..3.min(x+3){
+                                        for y2 in 0.max(y+1)..3.min(y+3){
+                                            for z2 in 0.max(z+1)..3.min(z+3){
+                                                surrounded[x2 as usize][y2 as usize][z2 as usize]=false;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    for x in 0..3 {
+                        for y in 0..3 {
+                            for z in 0..3 {
+                                if surrounded[x][y][z]{
+                                    self.chunk_updates.insert(chunk.0+ivec3(x as i32-1,y as i32-1,z as i32-1));
+                                }
+                            }
+                        }
+                    }
                 }
                 None => break,
             }
@@ -75,56 +108,60 @@ impl World {
     }
     #[profiling::function]
     pub fn update_display(&mut self, renderer: &mut Renderer) {
-        let positions: Vec<IVec3> = self.chunk_updates.drain().collect();
-        for pos in positions {
-            if self.chunk_map.get_chunk(pos).is_some() {
-                renderer
-                    .chunk_renderer
-                    .remove_chunk(pos, &mut renderer.queue);
-                renderer.chunk_renderer.add_chunk(
-                    pos,
-                    &mut self.create_mesh(pos),
-                    &renderer.queue,
-                    &renderer.device,
-                );
+        for pos in self.chunk_updates.drain(){
+            let mut chunks:[Box<Chunk>;27] = std::array::from_fn(|_| Box::new(Chunk::new()));
+            for z in -1..2{
+                for y in -1..2{
+                    for x in -1..2 {
+                        chunks[(x+1 + 3*(y+1) + 9*(z+1)) as usize] = self.chunk_map.get_chunk(pos+ivec3(x,y,z)).unwrap_or(&Box::new(Chunk::new())).clone();
+                    }
+                }
+            }
+            self.threadpool.send((pos,chunks)).unwrap();
+        }
+        loop {
+            if let Ok(mut mesh)=self.threadpool_receiver.try_recv() {
+                if self.chunk_map.get_chunk(mesh.0).is_some() {
+                    renderer
+                        .chunk_renderer
+                        .remove_chunk(mesh.0, &mut renderer.queue);
+                    renderer.chunk_renderer.add_chunk(
+                        mesh.0,
+                        &mut mesh.1,
+                        &renderer.queue,
+                        &renderer.device,
+                    );
+                }
+            }
+            else {
+                break
             }
         }
     }
     #[profiling::function]
     fn add_face(
-        &self,
+        chunks:&[Box<Chunk>;27],
         storage: &mut [Vec<Face>; 6],
         pos: UVec3,
-        chunk_pos: IVec3,
         dir: Direction,
         texture: u32,
     ) {
-        let global_pos =
-            ivec3(chunk_pos.x << 5, chunk_pos.y << 5, chunk_pos.z << 5) + pos.as_ivec3();
         let ao_blocks = [
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(1, 1, 0)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(1, 1, 0)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(1, 1, 1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(1, 1, 1)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(0, 1, 1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(0, 1, 1)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(-1, 1, 1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(-1, 1, 1)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(-1, 1, 0)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(-1, 1, 0)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(-1, 1, -1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(-1, 1, -1)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(0, 1, -1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(0, 1, -1)))
                 .is_full_block(),
-            self.chunk_map
-                .get_block(global_pos + dir.transform(ivec3(1, 1, -1)))
+            World::get_local_block(&chunks, pos.as_ivec3() + dir.transform(ivec3(1, 1, -1)))
                 .is_full_block(),
         ];
         let light: [u8; 4] = [
@@ -138,78 +175,71 @@ impl World {
                 * FACES_LIGHT[dir.id as usize]) as u8,
         ];
         storage[dir.id as usize].push(Face {
-            pos_dir_tex: (pos.x&63)|((pos.y&63)<<6)|((pos.z&63)<<12)|((dir.id as u32&7)<<18)|((texture&2047)<<21) ,
+            pos_dir_tex: (pos.x & 63)
+                | ((pos.y & 63) << 6)
+                | ((pos.z & 63) << 12)
+                | ((dir.id as u32 & 7) << 18)
+                | ((texture & 2047) << 21),
             light,
         })
     }
+    fn get_local_block(chunks: &[Box<Chunk>;27],pos:IVec3)->Block{
+        let chunk_pos:IVec3 = (pos>>5) + ivec3(1,1,1);
+        return chunks[(chunk_pos.x + 3*chunk_pos.y + 9*chunk_pos.z) as usize].get_block((pos&31).as_uvec3())
+    }
     #[profiling::function]
-    pub fn create_mesh(&self, pos: IVec3) -> [Vec<Face>; 6] {
-        let chunk = self.chunk_map.get_chunk(pos).unwrap();
-        let adjacent_chunks = [
-            self.chunk_map.get_chunk(pos + ivec3(1, 0, 0)),
-            self.chunk_map.get_chunk(pos + ivec3(0, 0, 1)),
-            self.chunk_map.get_chunk(pos + ivec3(0, 1, 0)),
-        ];
+    pub fn create_mesh(chunks: [Box<Chunk>;27]) -> [Vec<Face>; 6] {
         let mut storage: [Vec<Face>; 6] = Default::default();
-        let mut index = 0;
         for y in 0..32 {
             for z in 0..32 {
                 for x in 0..32 {
-                    let block1 = chunk.get_block(uvec3(x,y,z));
+                    let block1 = chunks[13].get_block(uvec3(x, y, z));
                     let mut block2: Block = if x < 31 {
-                        chunk.get_block(uvec3(x+1,y,z))
+                        chunks[13].get_block(uvec3(x + 1, y, z))
                     } else {
-                        if let Some(chunk) = adjacent_chunks[0] {
-                            chunk.get_block(uvec3(0, y, z))
-                        } else {
-                            Block { block_type: 0 }
-                        }
+                        chunks[13+1].get_block(uvec3(0, y, z))
                     };
                     let b1 = block1.is_full_block();
                     let mut b2 = block2.is_full_block();
                     if b1 != b2 {
                         if b1 == true {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x, y, z),
-                                pos,
                                 Direction { id: 1 },
                                 TEXTURE_INDEX[block1.block_type as usize - 1][1],
                             );
                         } else {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x + 1, y, z),
-                                pos,
                                 Direction { id: 0 },
                                 TEXTURE_INDEX[block2.block_type as usize - 1][0],
                             );
                         }
                     }
                     block2 = if z < 31 {
-                        chunk.get_block(uvec3(x,y,z+1))
+                        chunks[13].get_block(uvec3(x, y, z + 1))
                     } else {
-                        if let Some(chunk) = adjacent_chunks[1] {
-                            chunk.get_block(uvec3(x, y, 0))
-                        } else {
-                            Block { block_type: 0 }
-                        }
+                        chunks[13+9].get_block(uvec3(x, y, 0))
                     };
                     b2 = block2.is_full_block();
                     if b1 != b2 {
                         if b1 == true {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x, y, z),
-                                pos,
                                 Direction { id: 3 },
                                 TEXTURE_INDEX[block1.block_type as usize - 1][3],
                             );
                         } else {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x, y, z + 1),
-                                pos,
                                 Direction { id: 2 },
                                 TEXTURE_INDEX[block2.block_type as usize - 1][2],
                             );
@@ -217,35 +247,30 @@ impl World {
                     }
 
                     block2 = if y < 31 {
-                        chunk.get_block(uvec3(x,y+1,z))
+                        chunks[13].get_block(uvec3(x, y + 1, z))
                     } else {
-                        if let Some(chunk) = adjacent_chunks[2] {
-                            chunk.get_block(uvec3(x, 0, z))
-                        } else {
-                            Block { block_type: 0 }
-                        }
+                        chunks[13+3].get_block(uvec3(x, 0, z))
                     };
                     b2 = block2.is_full_block();
                     if b1 != b2 {
                         if b1 == true {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x, y, z),
-                                pos,
                                 Direction { id: 5 },
                                 TEXTURE_INDEX[block1.block_type as usize - 1][5],
                             );
                         } else {
-                            self.add_face(
+                            World::add_face(
+                                &chunks,
                                 &mut storage,
                                 uvec3(x, y + 1, z),
-                                pos,
                                 Direction { id: 4 },
                                 TEXTURE_INDEX[block2.block_type as usize - 1][4],
                             );
                         }
                     }
-                    index += 1;
                 }
             }
         }
@@ -369,7 +394,7 @@ impl World {
 
 impl Drop for World {
     fn drop(&mut self) {
-        for i in self.chunk_map.hash_map.drain(){
+        for i in self.chunk_map.hash_map.drain() {
             self.chunk_loader.save(i);
         }
     }

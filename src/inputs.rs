@@ -9,7 +9,7 @@ pub struct Inputs {
     pub mouse_motion_x: f64,
     pub mouse_motion_y: f64,
     pub mouse_button_states: [bool; 3],
-    cur_lock: bool
+    cur_lock: bool,
 }
 impl Inputs {
     pub fn new() -> Self {
@@ -44,21 +44,21 @@ impl Inputs {
                 WindowEvent::KeyboardInput {
                     event:
                         KeyEvent {
-                            physical_key:PhysicalKey::Code(key),
+                            physical_key: PhysicalKey::Code(key),
                             state,
                             ..
                         },
                     ..
                 } => {
-                    if matches!(key,KeyCode::KeyL) && *state == ElementState::Pressed{
-                        if self.cur_lock{
-                            self.cur_lock=false;
+                    if matches!(key, KeyCode::KeyL) && *state == ElementState::Pressed {
+                        if self.cur_lock {
+                            self.cur_lock = false;
                             window.set_cursor_grab(CursorGrabMode::None).unwrap();
                             window.set_cursor_visible(true);
-                        }
-                        else{
-                            self.cur_lock=true;
-                            window.set_cursor_grab(CursorGrabMode::Confined)
+                        } else {
+                            self.cur_lock = true;
+                            window
+                                .set_cursor_grab(CursorGrabMode::Confined)
                                 .or_else(|_e| window.set_cursor_grab(CursorGrabMode::Locked))
                                 .unwrap();
                             window.set_cursor_visible(false);

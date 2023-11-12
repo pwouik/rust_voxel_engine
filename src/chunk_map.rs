@@ -1,7 +1,7 @@
 use crate::block::Block;
 use crate::chunk::Chunk;
-use glam::{ivec3, uvec3, IVec3};
 use ahash::AHashMap;
+use glam::{ivec3, uvec3, IVec3};
 
 pub struct ChunkMap {
     pub hash_map: AHashMap<IVec3, Box<Chunk>>,

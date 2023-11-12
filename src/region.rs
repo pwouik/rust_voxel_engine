@@ -1,13 +1,14 @@
-use std::fs;
 use crate::chunk::Chunk;
 use bytemuck::Contiguous;
 use glam::IVec3;
+use std::convert::TryInto;
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::convert::TryInto;
 fn pos_to_id(pos: IVec3) -> usize {
-    return ((pos.x as usize & 15) + 16 * (pos.y as usize & 3) + 16 * 4 * (pos.z as usize & 15)) * 2;
+    return ((pos.x as usize & 15) + 16 * (pos.y as usize & 3) + 16 * 4 * (pos.z as usize & 15))
+        * 2;
 }
 pub struct Region {
     index: [u32; 2048],
@@ -33,7 +34,7 @@ impl Region {
                 let mut buffer = vec![0u8; 8192];
                 open_file.read_exact(&mut buffer).unwrap();
                 for i in 0..2048 {
-                    index[i] = u32::from_le_bytes(buffer[i*4..i*4+4].try_into().unwrap());
+                    index[i] = u32::from_le_bytes(buffer[i * 4..i * 4 + 4].try_into().unwrap());
                 }
                 open_file
             }
@@ -101,7 +102,7 @@ impl Region {
         let mut space = i32::MAX;
         for i in (0..2048).step_by(2) {
             let diff = self.index[i] as i32 - self.index[id] as i32;
-            if diff >= 0 && diff < space{
+            if diff >= 0 && diff < space {
                 space = diff;
             }
         }
@@ -111,13 +112,14 @@ impl Region {
     pub fn save_chunk(&mut self, mut chunk: Box<Chunk>, pos: IVec3) {
         self.chunk_count -= 1;
         let location = pos_to_id(pos);
-        let data= chunk.serialize();
+        let data = chunk.serialize();
         self.index[location + 1] = data.len() as u32;
-        if self.available_space(location)< data.len() as u32 {
+        if self.available_space(location) < data.len() as u32 {
             self.index[location] = self.file.seek(SeekFrom::End(0)).unwrap() as u32;
-        }
-        else{
-            self.file.seek(SeekFrom::Start(self.index[location] as u64)).unwrap();
+        } else {
+            self.file
+                .seek(SeekFrom::Start(self.index[location] as u64))
+                .unwrap();
         }
         self.file.write_all(&data).unwrap();
     }
@@ -131,7 +133,9 @@ impl Region {
             return None;
         }
         let mut chunk = Box::new(Chunk::new());
-        self.file.seek(SeekFrom::Start(self.index[location] as u64)).unwrap();
+        self.file
+            .seek(SeekFrom::Start(self.index[location] as u64))
+            .unwrap();
         let mut buffer = vec![0u8; data_size];
         self.file.read_exact(&mut buffer).unwrap();
         chunk.deserialize(&buffer);

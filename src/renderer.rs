@@ -33,7 +33,7 @@ pub struct Renderer {
     depth_bind_group: wgpu::BindGroup,
     depth_sampler: wgpu::Sampler,
     player_chunk_pos: IVec3,
-    frustum:[Vec3; 5],
+    frustum: [Vec3; 5],
     pub chunk_renderer: ChunkRenderer,
 }
 impl Renderer {
@@ -42,8 +42,8 @@ impl Renderer {
         let size = window.inner_size();
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor{
-            backends:wgpu::Backends::PRIMARY,
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
             ..wgpu::InstanceDescriptor::default()
         });
         let surface = unsafe { instance.create_surface(&window) }.unwrap();
@@ -229,8 +229,14 @@ impl Renderer {
             depth_bind_group_layout,
             depth_bind_group,
             depth_sampler,
-            player_chunk_pos: ivec3(0,0,0),
-            frustum: [vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0),vec3(0.0,0.0,0.0)],
+            player_chunk_pos: ivec3(0, 0, 0),
+            frustum: [
+                vec3(0.0, 0.0, 0.0),
+                vec3(0.0, 0.0, 0.0),
+                vec3(0.0, 0.0, 0.0),
+                vec3(0.0, 0.0, 0.0),
+                vec3(0.0, 0.0, 0.0),
+            ],
             chunk_renderer,
             context_bind_group,
         }
@@ -328,7 +334,7 @@ impl Renderer {
         self.player_chunk_pos = ivec3(
             (camera.pos.x / 32.0).floor() as i32,
             (camera.pos.y / 32.0).floor() as i32,
-            (camera.pos.z / 32.0).floor() as i32
+            (camera.pos.z / 32.0).floor() as i32,
         );
         self.queue.write_buffer(
             &self.pos_buffer,

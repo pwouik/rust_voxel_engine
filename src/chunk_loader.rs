@@ -10,8 +10,8 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub const RENDER_DIST: i32 = 10;
-pub const RENDER_DIST_HEIGHT: i32 = 4;
+pub const RENDER_DIST: i32 = 50;
+pub const RENDER_DIST_HEIGHT: i32 = 6;
 pub const RENDER_DIST2: i32 = RENDER_DIST * 2 + 1;
 pub const RENDER_DIST_HEIGHT2: i32 = RENDER_DIST_HEIGHT * 2 + 1;
 
@@ -31,7 +31,7 @@ impl ChunkLoader {
             (pos, chunk)
         });
         let loading_chunks = HashSet::new();
-        let (load_sender, load_receiver) = crossbeam_channel::bounded(60)
+        let (load_sender, load_receiver) = crossbeam_channel::bounded(500)
             as (
                 crossbeam_channel::Sender<IVec3>,
                 crossbeam_channel::Receiver<IVec3>,
@@ -60,7 +60,7 @@ impl ChunkLoader {
                         if !loc_running.load(Ordering::Relaxed) {
                             break;
                         }
-                        thread::sleep(Duration::from_millis(20));
+                        thread::sleep(Duration::from_millis(15));
                         loop {
                             match load_receiver.try_recv() {
                                 Ok(pos) => {
@@ -109,9 +109,9 @@ impl ChunkLoader {
     }
     pub fn try_load(&mut self, player_pos: IVec3, pos: IVec3, chunk_map: &ChunkMap) {
         let chunk_pos = player_pos + pos;
-        if self.loading_chunks.len() < 60
+        if chunk_map.get_chunk(chunk_pos).is_none()
+            && self.loading_chunks.len() < 500
             && !self.loading_chunks.contains(&chunk_pos)
-            && chunk_map.get_chunk(chunk_pos).is_none()
         {
             if self.load_sender.send(chunk_pos).is_ok() {
                 self.loading_chunks.insert(chunk_pos);

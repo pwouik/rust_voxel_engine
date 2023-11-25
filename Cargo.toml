@@ -7,7 +7,6 @@ resolver="2"
 
 [dependencies]
 profiling = "1.0"
-noise = { git = "https://github.com/Razaekel/noise-rs" , rev="c6942d4"}
 anyhow = "1.0"
 image = "0.24"
 winit = "0.29"
@@ -18,7 +17,7 @@ wgpu = { git="https://github.com/gfx-rs/wgpu", rev = "e78e9dd4000635883584f7ce1e
 futures = "0.3"
 bytemuck = { version = "1.14", features = [ "derive" ] }
 crossbeam-channel = "0.5"
-lz4_flex = "0.11"
+simdnoise = "3.1"
 ahash = "0.8"
 
 [features]

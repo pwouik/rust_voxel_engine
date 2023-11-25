@@ -10,7 +10,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub const RENDER_DIST: i32 = 50;
+pub const RENDER_DIST: i32 = 15;
 pub const RENDER_DIST_HEIGHT: i32 = 6;
 pub const RENDER_DIST2: i32 = RENDER_DIST * 2 + 1;
 pub const RENDER_DIST_HEIGHT2: i32 = RENDER_DIST_HEIGHT * 2 + 1;

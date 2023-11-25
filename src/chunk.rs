@@ -1,6 +1,6 @@
 use crate::block::*;
-use glam::{dvec3, ivec3, uvec3, DVec3, IVec3, UVec3};
-use noise::{NoiseFn, Simplex};
+use glam::{dvec3, ivec3, uvec3, DVec3, IVec3, UVec3, Vec3, vec3};
+use simdnoise::NoiseBuilder;
 use std::convert::TryInto;
 
 const BITSIZES: [u8; 13] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16];
@@ -68,20 +68,19 @@ impl Chunk {
     }
     #[profiling::function]
     pub fn generate(&mut self, pos: IVec3) {
-        let ssn = Simplex::new(0);
-        for x in 0i32..32 {
-            for z in 0i32..32 {
-                for y in 0i32..32 {
-                    let world_pos: DVec3 = (pos * 32 + ivec3(x, y, z)).into();
-                    let height = 60.0 * ssn.get([world_pos.x / 400.0, world_pos.z / 400.0])
-                        + 30.0 * (1.0 - ssn.get([world_pos.x / 80.0, world_pos.z / 80.0]).abs());
-                    let depth = height - world_pos.y;
+        let chunk_pos:Vec3 = vec3((pos.x * 32) as f32, (pos.y * 32) as f32, (pos.z*32)as f32);
+        let (hills,_,_) = NoiseBuilder::gradient_2d_offset(chunk_pos.x,32,chunk_pos.z,32).with_freq(0.002).generate();
+        let (valley,_,_) = NoiseBuilder::gradient_2d_offset(chunk_pos.x,32,chunk_pos.z,32).with_freq(0.007).with_seed(132487).generate();
+        let (caves1,_,_) = NoiseBuilder::gradient_3d_offset(chunk_pos.x,32,chunk_pos.y,32,chunk_pos.z,32).with_freq(0.007).generate();
+        let (caves2,_,_) = NoiseBuilder::gradient_3d_offset(chunk_pos.x,32,chunk_pos.y,32,chunk_pos.z,32).with_freq(0.01).with_seed(132487).generate();
+        for z in 0usize..32 {
+            for y in 0usize..32 {
+                for x in 0usize..32 {
+                    let height = hills[x+(z<<5)]*2000.0 - valley[x+(z<<5)].abs()*1000.0;
+                    let depth = height - (pos.y * 32 + y as i32) as f32;
                     let mut block = Block { block_type: 0 };
-                    if ssn.get((world_pos / 90.0).into()).abs()
-                        + ssn
-                            .get((world_pos / 90.0 + dvec3(0.0, 7.0, 0.0)).into())
-                            .abs()
-                        > 0.1
+                    let id = x+(y<<5)+(z<<10);
+                    if caves1[id].abs()+caves2[id].abs() > 0.005
                     {
                         if depth > 5.0 {
                             block = Block { block_type: 3 };

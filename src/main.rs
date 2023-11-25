@@ -15,7 +15,6 @@ mod chunk;
 mod chunk_loader;
 mod chunk_map;
 mod chunk_renderer;
-mod entity;
 mod inputs;
 mod mesh;
 mod mipmap;

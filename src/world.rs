@@ -165,13 +165,13 @@ impl World {
                 .is_full_block(),
         ];
         let light: [u8; 4] = [
-            ((255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u32 * 200) as f32
+            ((255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u32 * 150) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u32 * 200) as f32
+            ((255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u32 * 150) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u32 * 200) as f32
+            ((255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u32 * 150) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u32 * 200) as f32
+            ((255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u32 * 150) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
         ];
         storage[dir.id as usize].push(Face {

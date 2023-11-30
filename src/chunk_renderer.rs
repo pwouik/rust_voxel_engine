@@ -6,12 +6,15 @@ use glam::{ivec3, IVec3, Vec3};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-pub const IMAGES: [&str; 5] = [
+pub const IMAGES: [&str; 8] = [
     "textures/grass_side.png",
     "textures/grass_top.png",
     "textures/grass_bottom.png",
     "textures/stone.png",
     "textures/brick.png",
+    "textures/log_side.png",
+    "textures/log_top.png",
+    "textures/leaves.png",
 ];
 
 pub struct ChunkRenderer {
@@ -203,7 +206,7 @@ impl ChunkRenderer {
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth32Float,
+                format: DEPTH_FORMAT,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Never,
                 stencil: Default::default(),
@@ -300,7 +303,7 @@ impl ChunkRenderer {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_compare: wgpu::CompareFunction::Greater,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
@@ -433,7 +436,7 @@ impl ChunkRenderer {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &depth_texture.view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    load: wgpu::LoadOp::Clear(0.0),
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,

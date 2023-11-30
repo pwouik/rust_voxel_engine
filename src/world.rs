@@ -11,11 +11,13 @@ use crate::util::threadpool::ThreadPool;
 use ahash::AHashSet;
 use glam::{ivec3, uvec3, IVec3, UVec3, Vec3};
 
-const TEXTURE_INDEX: [[u32; 6]; 4] = [
+const TEXTURE_INDEX: [[u32; 6]; 6] = [
     [0, 0, 0, 0, 2, 1],
     [2, 2, 2, 2, 2, 2],
     [3, 3, 3, 3, 3, 3],
     [4, 4, 4, 4, 4, 4],
+    [5, 5, 5, 5, 6, 6],
+    [7 ,7 ,7 ,7 ,7 ,7],
 ];
 const FACES_LIGHT: [f32; 6] = [0.4, 0.4, 0.7, 0.7, 0.1, 1.0];
 
@@ -138,7 +140,6 @@ impl World {
             }
         }
     }
-    #[profiling::function]
     fn add_face(
         chunks:&[Box<Chunk>;27],
         storage: &mut [Vec<Face>; 6],
@@ -165,13 +166,13 @@ impl World {
                 .is_full_block(),
         ];
         let light: [u8; 4] = [
-            ((255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u32 * 150) as f32
+            ((255 - (ao_blocks[4] || ao_blocks[5] || ao_blocks[6]) as u32 * 180) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u32 * 150) as f32
+            ((255 - (ao_blocks[2] || ao_blocks[3] || ao_blocks[4]) as u32 * 180) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u32 * 150) as f32
+            ((255 - (ao_blocks[0] || ao_blocks[1] || ao_blocks[2]) as u32 * 180) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
-            ((255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u32 * 150) as f32
+            ((255 - (ao_blocks[6] || ao_blocks[7] || ao_blocks[0]) as u32 * 180) as f32
                 * FACES_LIGHT[dir.id as usize]) as u8,
         ];
         storage[dir.id as usize].push(Face {

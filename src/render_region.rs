@@ -37,7 +37,7 @@ impl RenderRegion {
         scan_bind_group_layout: &wgpu::BindGroupLayout,
         occlusion_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let face_buffer_len = 32 * 32 * 3;
+        let face_buffer_len = 32 * 32 * 3 *10000;
         let face_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Storage Buffer"),
             size: face_buffer_len,
@@ -47,7 +47,7 @@ impl RenderRegion {
             mapped_at_creation: false,
         });
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Storage Buffer"),
+            label: Some("Table Buffer"),
             size: (RENDER_REGION_CHUNKS) as u64 * 7 * 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -76,7 +76,7 @@ impl RenderRegion {
             mapped_at_creation: false,
         });
         let staging_count_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Count Buffer"),
+            label: Some("Staging count Buffer"),
             contents: bytemuck::cast_slice(&[0u32]),
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         });

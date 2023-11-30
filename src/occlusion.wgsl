@@ -69,7 +69,7 @@ fn fs_main(pos_in: Output){
     //let d = textureSampleCompare(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r;//textureSampleCompare(depth,depth_sampler,tex_pos.xy*0.5 + 0.5,0.0);
     var c=0.5f;
     var d=textureSample(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r - pos_in.frame_pos.z;
-    if(textureSample(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r >= pos_in.frame_pos.z){
+    if(textureSample(depth, depth_sampler, tex_pos.xy*0.5 + 0.5).r <= pos_in.frame_pos.z){
         let pos:vec3i = context.player_pos + pos_in.chunk_pos;
         let id:u32 = u32((pos.x & 15) + 16*(pos.y & 7) + 16*8*(pos.z & 15))*6u;
         if(pos_in.chunk_pos.x>=0){

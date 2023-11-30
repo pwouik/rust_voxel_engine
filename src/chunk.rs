@@ -14,7 +14,6 @@ pub struct Chunk {
     data: Vec<u64>,
 }
 impl Chunk {
-    #[profiling::function]
     pub fn new() -> Self {
         Chunk {
             palette: vec![0],
@@ -70,16 +69,17 @@ impl Chunk {
     pub fn generate(&mut self, pos: IVec3) {
         let chunk_pos:Vec3 = vec3((pos.x * 32) as f32, (pos.y * 32) as f32, (pos.z*32)as f32);
         let (hills,_,_) = NoiseBuilder::gradient_2d_offset(chunk_pos.x,32,chunk_pos.z,32).with_freq(0.002).generate();
-        let (valley,_,_) = NoiseBuilder::gradient_2d_offset(chunk_pos.x,32,chunk_pos.z,32).with_freq(0.007).with_seed(132487).generate();
+        let (valley,_,_) = NoiseBuilder::gradient_2d_offset(chunk_pos.x,32,chunk_pos.z,32).with_freq(0.01).with_seed(132487).generate();
         let (caves1,_,_) = NoiseBuilder::gradient_3d_offset(chunk_pos.x,32,chunk_pos.y,32,chunk_pos.z,32).with_freq(0.007).generate();
         let (caves2,_,_) = NoiseBuilder::gradient_3d_offset(chunk_pos.x,32,chunk_pos.y,32,chunk_pos.z,32).with_freq(0.01).with_seed(132487).generate();
         for z in 0usize..32 {
             for y in 0usize..32 {
                 for x in 0usize..32 {
-                    let height = hills[x+(z<<5)]*2000.0 - valley[x+(z<<5)].abs()*1000.0;
+                    let height = hills[x+(z<<5)]*2000.0 - valley[x+(z<<5)].abs()*500.0;
                     let depth = height - (pos.y * 32 + y as i32) as f32;
                     let mut block = Block { block_type: 0 };
                     let id = x+(y<<5)+(z<<10);
+
                     if caves1[id].abs()+caves2[id].abs() > 0.005
                     {
                         if depth > 5.0 {

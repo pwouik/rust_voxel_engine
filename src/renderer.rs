@@ -87,14 +87,13 @@ impl Renderer {
         };
         surface.configure(&device, &config);
 
-        let fovy = 45.0;
+        let fovy = 70.0/180.0* std::f32::consts::PI;
         let z_near = 0.01;
         let z_far = 10000.0;
-        let projection = Mat4::perspective_rh(
+        let projection = Mat4::perspective_infinite_reverse_rh(
             fovy,
             config.width as f32 / config.height as f32,
-            z_near,
-            z_far,
+            z_near
         );
 
         let view_matrix: Mat4 = Mat4::IDENTITY;
@@ -290,11 +289,10 @@ impl Renderer {
             ],
             label: Some("depth_bind_group"),
         });
-        self.projection = Mat4::perspective_rh(
+        self.projection = Mat4::perspective_infinite_reverse_rh(
             self.fovy,
             self.config.width as f32 / self.config.height as f32,
-            self.z_near,
-            self.z_far,
+            self.z_near
         );
         self.surface.configure(&self.device, &self.config);
     }

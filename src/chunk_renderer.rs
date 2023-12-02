@@ -395,7 +395,7 @@ impl ChunkRenderer {
             }
         }
         for region in &mut self.map {
-            region.1.read_count(encoder);
+            region.1.reset_count(encoder);
         }
         {
             let mut scan_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

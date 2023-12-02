@@ -10,7 +10,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-pub const RENDER_DIST: i32 = 50;
+pub const RENDER_DIST: i32 = 27;
 pub const RENDER_DIST_HEIGHT: i32 = 8;
 pub const RENDER_DIST2: i32 = RENDER_DIST * 2 + 1;
 pub const RENDER_DIST_HEIGHT2: i32 = RENDER_DIST_HEIGHT * 2 + 1;
@@ -31,7 +31,7 @@ impl ChunkLoader {
             (pos, chunk)
         });
         let loading_chunks = HashSet::new();
-        let (load_sender, load_receiver) = crossbeam_channel::bounded(500)
+        let (load_sender, load_receiver) = crossbeam_channel::bounded(1500)
             as (
                 crossbeam_channel::Sender<IVec3>,
                 crossbeam_channel::Receiver<IVec3>,

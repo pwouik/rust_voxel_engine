@@ -6,7 +6,7 @@ use crate::renderer::Renderer;
 use crate::world::World;
 #[cfg(feature = "profile-with-tracy")]
 use profiling::tracy_client;
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, KeyCode, NamedKey};
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 mod block;
@@ -60,12 +60,13 @@ fn main() {
                         WindowEvent::Resized(physical_size) => {
                             renderer.resize(*physical_size);
                         }
-                        WindowEvent::RedrawRequested => {
-                            renderer.render(&camera);
-                        }
                         _ => {}
                     },
                     Event::AboutToWait => {
+                        if inputs.keyboard[KeyCode::Escape as usize]{
+                            elwt.exit();
+                        }
+                        renderer.get_next_texture();
                         camera.update(&inputs, &mut world);
                         inputs.reset();
                         counter += 1;
@@ -73,6 +74,7 @@ fn main() {
                             world.tick(&camera, &mut renderer);
                         }
                         world.update_display(&mut renderer);
+                        renderer.render(&camera);
                         window.request_redraw();
                         profiling::finish_frame!();
                     }

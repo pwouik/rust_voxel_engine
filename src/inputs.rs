@@ -31,8 +31,8 @@ impl Inputs {
         match event {
             Event::DeviceEvent { ref event, .. } => match event {
                 DeviceEvent::MouseMotion { delta } => {
-                    self.mouse_motion_x = delta.0;
-                    self.mouse_motion_y = delta.1;
+                    self.mouse_motion_x += delta.0;
+                    self.mouse_motion_y += delta.1;
                     true
                 }
                 _ => true,
@@ -50,19 +50,22 @@ impl Inputs {
                         },
                     ..
                 } => {
-                    if matches!(key, KeyCode::KeyL) && *state == ElementState::Pressed {
-                        if self.cur_lock {
-                            self.cur_lock = false;
-                            window.set_cursor_grab(CursorGrabMode::None).unwrap();
-                            window.set_cursor_visible(true);
-                        } else {
-                            self.cur_lock = true;
-                            window
-                                .set_cursor_grab(CursorGrabMode::Confined)
-                                .or_else(|_e| window.set_cursor_grab(CursorGrabMode::Locked))
-                                .unwrap();
-                            window.set_cursor_visible(false);
+                    match key{
+                        KeyCode::KeyL => if *state == ElementState::Pressed {
+                            if self.cur_lock {
+                                self.cur_lock = false;
+                                window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                                window.set_cursor_visible(true);
+                            } else {
+                                self.cur_lock = true;
+                                window
+                                    .set_cursor_grab(CursorGrabMode::Confined)
+                                    .or_else(|_e| window.set_cursor_grab(CursorGrabMode::Locked))
+                                    .unwrap();
+                                window.set_cursor_visible(false);
+                            }
                         }
+                        _ => {}
                     }
                     self.keyboard[*key as usize] = *state == ElementState::Pressed;
                     true

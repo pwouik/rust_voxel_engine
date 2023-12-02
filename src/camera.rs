@@ -2,7 +2,6 @@ use crate::block::Block;
 use crate::inputs::*;
 use crate::world::World;
 use glam::{vec3, Mat4, Vec3};
-use winit::event::*;
 use winit::keyboard::KeyCode;
 
 pub struct Camera {
@@ -46,8 +45,8 @@ impl Camera {
 
     pub fn update(&mut self, inputs: &Inputs, world: &mut World) {
         self.pitch =
-            (self.pitch + (-inputs.mouse_motion_y / 200.0) as f32).clamp(-1.5707963, 1.5707963);
-        self.yaw += (inputs.mouse_motion_x / 200.0) as f32;
+            (self.pitch + (-inputs.mouse_motion_y / 300.0) as f32).clamp(-1.5707963, 1.5707963);
+        self.yaw += (inputs.mouse_motion_x / 300.0) as f32;
         if inputs.keyboard[KeyCode::KeyW as usize] {
             self.velocity += vec3(self.yaw.cos(), 0.0, self.yaw.sin()) * self.speed;
         }

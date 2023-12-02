@@ -21,8 +21,8 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     fovy: f32,
     z_near: f32,
-    z_far: f32,
     pub size: winit::dpi::PhysicalSize<u32>,
+    frame:Option<wgpu::SurfaceTexture>,
     projection: Mat4,
     view_matrix: Mat4,
     viewproj_buffer: wgpu::Buffer,
@@ -61,8 +61,7 @@ impl Renderer {
                     label: None,
                     features: wgpu::Features::MULTI_DRAW_INDIRECT
                         | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
-                        | wgpu::Features::PUSH_CONSTANTS
-                        | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                        | wgpu::Features::PUSH_CONSTANTS,
                     limits: wgpu::Limits {
                         max_compute_invocations_per_workgroup: 1024,
                         max_compute_workgroup_size_x: 1024,
@@ -89,7 +88,6 @@ impl Renderer {
 
         let fovy = 70.0/180.0* std::f32::consts::PI;
         let z_near = 0.01;
-        let z_far = 10000.0;
         let projection = Mat4::perspective_infinite_reverse_rh(
             fovy,
             config.width as f32 / config.height as f32,
@@ -218,8 +216,8 @@ impl Renderer {
             queue,
             fovy,
             z_near,
-            z_far,
             size,
+            frame:None,
             projection,
             view_matrix,
             viewproj_buffer,
@@ -296,20 +294,22 @@ impl Renderer {
         );
         self.surface.configure(&self.device, &self.config);
     }
-
     #[profiling::function]
-    pub fn render(&mut self, camera: &Camera) {
-        let frame = match self.surface.get_current_texture() {
-            Ok(frame) => frame,
+    pub fn get_next_texture(&mut self){
+        self.frame = match self.surface.get_current_texture() {
+            Ok(frame) => Some(frame),
             Err(e) => {
                 println!("fail {}", e);
                 self.surface.configure(&self.device, &self.config);
-                self.surface
+                Some(self.surface
                     .get_current_texture()
-                    .expect("Failed to acquire next surface texture!")
+                    .expect("Failed to acquire next surface texture!"))
             }
         };
-        let view = frame
+    }
+    #[profiling::function]
+    pub fn render(&mut self, camera: &Camera) {
+        let view = self.frame.as_ref().unwrap()
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -365,6 +365,6 @@ impl Renderer {
         );
 
         self.queue.submit(iter::once(encoder.finish()));
-        frame.present();
+        self.frame.take().unwrap().present();
     }
 }
